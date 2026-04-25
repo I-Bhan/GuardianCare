@@ -62,6 +62,24 @@ def init_db():
         )
     """)
 
+    # Vitals readings
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS vitals_readings (
+            id                 INTEGER PRIMARY KEY AUTOINCREMENT,
+            device_id          TEXT,
+            patient_id         TEXT,
+            patient_name       TEXT,
+            heart_rate         REAL,
+            body_temperature   REAL,
+            oxygen_saturation  REAL,
+            systolic_bp        REAL,
+            diastolic_bp       REAL,
+            risk_level         TEXT,
+            confidence         REAL,
+            timestamp          TEXT NOT NULL
+        )
+    """)
+
     # Seed default patients
     for pid, name, room in DEFAULT_PATIENTS:
         c.execute("""
@@ -163,6 +181,53 @@ def get_fall_counts(role: str = "doctor", patient_id: str = None) -> list[dict]:
             ORDER BY total_falls DESC
         """, (patient_id,))
 
+    rows = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return rows
+
+
+# ── Vitals readings ───────────────────────────────────────────────────────────
+def log_vitals_reading(device_id: str, patient_id: str, patient_name: str,
+                       vitals: dict, risk_level: str, confidence: float):
+    conn = sqlite3.connect(DB_PATH)
+    c = conn.cursor()
+    c.execute("""
+        INSERT INTO vitals_readings
+            (device_id, patient_id, patient_name,
+             heart_rate, body_temperature, oxygen_saturation,
+             systolic_bp, diastolic_bp, risk_level, confidence, timestamp)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        device_id, patient_id, patient_name,
+        vitals["heart_rate"], vitals["body_temperature"],
+        vitals["oxygen_saturation"], vitals["systolic_bp"], vitals["diastolic_bp"],
+        risk_level, confidence,
+        datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    ))
+    conn.commit()
+    conn.close()
+
+
+def get_all_vitals(limit: int = 100) -> list[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM vitals_readings ORDER BY timestamp DESC LIMIT ?", (limit,)
+    )
+    rows = [dict(row) for row in c.fetchall()]
+    conn.close()
+    return rows
+
+
+def get_vitals_by_patient(patient_id: str, limit: int = 100) -> list[dict]:
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute(
+        "SELECT * FROM vitals_readings WHERE patient_id = ? ORDER BY timestamp DESC LIMIT ?",
+        (patient_id, limit),
+    )
     rows = [dict(row) for row in c.fetchall()]
     conn.close()
     return rows

@@ -65,6 +65,7 @@ class VitalsInput(BaseModel):
     oxygen_saturation: float = Field(..., gt=0,  description="SpO2 percentage")
     systolic_bp:       float = Field(..., gt=0,  description="Systolic blood pressure mmHg")
     diastolic_bp:      float = Field(..., gt=0,  description="Diastolic blood pressure mmHg")
+    device_id:         Optional[str] = Field(None, description="Smartwatch device ID")
 
 
 class ProcessFrameRequest(BaseModel):
@@ -165,6 +166,20 @@ async def analyze_vitals(req: VitalsInput):
     if not result["valid"]:
         raise HTTPException(422, detail=result["errors"])
 
+    # Persist reading if a device_id was provided
+    if req.device_id:
+        patient = Db.get_patient_by_device(req.device_id)
+        patient_id   = patient["id"]   if patient else None
+        patient_name = patient["name"] if patient else "Unknown"
+        Db.log_vitals_reading(
+            device_id=req.device_id,
+            patient_id=patient_id,
+            patient_name=patient_name,
+            vitals=vitals_dict,
+            risk_level=result["risk_level"],
+            confidence=result["confidence"],
+        )
+
     return {
         "risk_level":  result["risk_level"],
         "explanation": result["explanation"],
@@ -218,6 +233,33 @@ async def process_event(req: ProcessEventRequest):
     output["alert_sent"]  = img_path is not None
     output["snapshot"]    = img_path
     return output
+
+
+# ══════════════════════════════════════════════════════════════════════════════
+#  GET /vitals
+# ══════════════════════════════════════════════════════════════════════════════
+
+@router.get("/vitals", summary="All recorded vitals readings")
+async def get_vitals():
+    try:
+        return Db.get_all_vitals()
+    except Exception as exc:
+        log.error(f"/vitals error: {exc}")
+        raise HTTPException(500, "Database error")
+
+
+@router.get("/vitals/{patient_id}", summary="Vitals readings for a specific patient")
+async def get_vitals_by_patient(patient_id: str):
+    try:
+        rows = Db.get_vitals_by_patient(patient_id)
+        if not rows:
+            raise HTTPException(404, f"No vitals found for patient '{patient_id}'")
+        return rows
+    except HTTPException:
+        raise
+    except Exception as exc:
+        log.error(f"/vitals/{{patient_id}} error: {exc}")
+        raise HTTPException(500, "Database error")
 
 
 # ══════════════════════════════════════════════════════════════════════════════

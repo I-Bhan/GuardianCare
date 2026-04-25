@@ -55,7 +55,7 @@ def simulate_device(device: dict, df: pd.DataFrame):
         try:
             resp = requests.post(
                 f"{BASE_URL}/analyze_vitals",
-                json=vitals,
+                json={**vitals, "device_id": device["device_id"]},
                 timeout=10,
             )
 
