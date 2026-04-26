@@ -24,6 +24,7 @@ _ROOT = Path(__file__).resolve().parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
+from guardiancare_api.config import ALLOWED_ORIGINS
 from guardiancare_api.utils.logger import get_logger
 from guardiancare_api.models.fall_model import FallDetectionModel
 from guardiancare_api.models.face_model import FaceRecognitionModel
@@ -91,12 +92,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Allow all origins for local development (tighten for production)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
 

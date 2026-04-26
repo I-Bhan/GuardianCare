@@ -1,8 +1,11 @@
 import sqlite3
 from pathlib import Path
 from datetime import datetime
+from passlib.context import CryptContext
 
 DB_PATH = str(Path(__file__).resolve().parent / "guardiancare.db")
+
+_pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 # ── Default patients and devices ──────────────────────────────────────────────
 DEFAULT_PATIENTS = [
@@ -13,6 +16,12 @@ DEFAULT_PATIENTS = [
 DEFAULT_DEVICES = [
     ("watch_001", "p001", "smartwatch"),
     ("watch_002", "p002", "smartwatch"),
+]
+
+DEFAULT_USERS = [
+    ("doc001", "doctor@guardiancare.com",  "doctor123", "doctor", None),
+    ("fam001", "family1@guardiancare.com", "family123", "family", "p001"),
+    ("fam002", "family2@guardiancare.com", "family123", "family", "p002"),
 ]
 
 
@@ -55,10 +64,29 @@ def init_db():
     # Users
     c.execute("""
         CREATE TABLE IF NOT EXISTS users (
-            id         TEXT PRIMARY KEY,
-            email      TEXT NOT NULL,
-            role       TEXT NOT NULL DEFAULT 'family',
-            patient_id TEXT
+            id            TEXT PRIMARY KEY,
+            email         TEXT NOT NULL UNIQUE,
+            password_hash TEXT,
+            role          TEXT NOT NULL DEFAULT 'family',
+            patient_id    TEXT,
+            FOREIGN KEY (patient_id) REFERENCES patients(id)
+        )
+    """)
+
+    # Migration: add password_hash to existing tables that lack it
+    try:
+        c.execute("ALTER TABLE users ADD COLUMN password_hash TEXT")
+    except sqlite3.OperationalError:
+        pass
+
+    # Invites
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS invites (
+            token       TEXT PRIMARY KEY,
+            patient_id  TEXT NOT NULL,
+            expires_at  TEXT NOT NULL,
+            used        INTEGER NOT NULL DEFAULT 0,
+            FOREIGN KEY (patient_id) REFERENCES patients(id)
         )
     """)
 
@@ -93,6 +121,15 @@ def init_db():
             INSERT OR IGNORE INTO devices (device_id, patient_id, device_type)
             VALUES (?, ?, ?)
         """, (did, pid, dtype))
+
+    # Seed default users (only hash password if user doesn't exist yet)
+    for uid, email, password, role, pid in DEFAULT_USERS:
+        c.execute("SELECT id FROM users WHERE id = ?", (uid,))
+        if not c.fetchone():
+            c.execute("""
+                INSERT INTO users (id, email, password_hash, role, patient_id)
+                VALUES (?, ?, ?, ?, ?)
+            """, (uid, email, _pwd_context.hash(password), role, pid))
 
     conn.commit()
     conn.close()
@@ -168,7 +205,7 @@ def get_fall_counts(role: str = "doctor", patient_id: str = None) -> list[dict]:
             SELECT person_name, patient_id,
                    COUNT(*) AS total_falls, MAX(timestamp) AS last_fall
             FROM incidents
-            GROUP BY person_name
+            GROUP BY patient_id, person_name
             ORDER BY total_falls DESC
         """)
     else:
@@ -177,7 +214,7 @@ def get_fall_counts(role: str = "doctor", patient_id: str = None) -> list[dict]:
                    COUNT(*) AS total_falls, MAX(timestamp) AS last_fall
             FROM incidents
             WHERE patient_id = ?
-            GROUP BY person_name
+            GROUP BY patient_id, person_name
             ORDER BY total_falls DESC
         """, (patient_id,))
 
@@ -263,6 +300,77 @@ def get_all_devices() -> list[dict]:
     rows = [dict(row) for row in c.fetchall()]
     conn.close()
     return rows
+
+
+# ── Invites ───────────────────────────────────────────────────────────────────
+def create_invite(token: str, patient_id: str, expires_at: str) -> None:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+            INSERT INTO invites (token, patient_id, expires_at, used)
+            VALUES (?, ?, ?, 0)
+        """, (token, patient_id, expires_at))
+        conn.commit()
+
+
+def get_invite(token: str) -> dict | None:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM invites WHERE token = ?", (token,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def mark_invite_used(token: str) -> None:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("UPDATE invites SET used = 1 WHERE token = ?", (token,))
+        conn.commit()
+
+
+# ── Patients (lookup by name) ─────────────────────────────────────────────────
+def get_patient_id_by_name(name: str) -> str | None:
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT id FROM patients WHERE name = ?", (name,)
+        ).fetchone()
+    return row[0] if row else None
+
+
+# ── Users ─────────────────────────────────────────────────────────────────────
+def get_user_by_email(email: str) -> dict | None:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM users WHERE email = ?", (email,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def get_user_by_id(user_id: str) -> dict | None:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.row_factory = sqlite3.Row
+        row = conn.execute(
+            "SELECT * FROM users WHERE id = ?", (user_id,)
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def create_user(user_id: str, email: str, password_hash: str,
+                role: str, patient_id: str = None) -> None:
+    with sqlite3.connect(DB_PATH) as conn:
+        conn.execute("""
+            INSERT INTO users (id, email, password_hash, role, patient_id)
+            VALUES (?, ?, ?, ?, ?)
+        """, (user_id, email, password_hash, role, patient_id))
+        conn.commit()
+
+
+def email_exists(email: str) -> bool:
+    with sqlite3.connect(DB_PATH) as conn:
+        row = conn.execute(
+            "SELECT id FROM users WHERE email = ?", (email,)
+        ).fetchone()
+    return row is not None
 
 
 # ── Patients ──────────────────────────────────────────────────────────────────

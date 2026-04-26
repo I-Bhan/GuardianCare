@@ -60,7 +60,7 @@ def identify_person(frame) -> str:
 
             # تحقق من الـ distance
             distance_col = [c for c in best.index if "distance" in c.lower()]
-            if distance_col and best[distance_col[0]] > 0.25:
+            if distance_col and float(best[distance_col[0]]) > 0.25:
                 return "Unknown"
 
             best_match = best["identity"]
