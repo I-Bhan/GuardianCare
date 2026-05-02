@@ -1,34 +1,10 @@
-"""
-api/routes.py
-FastAPI router — all endpoints defined here.
-
-Endpoints:
-    POST /auth/login             → get JWT token
-    GET  /auth/me                → current user info
-
-    POST /process_frame          → fall detection + face recognition
-    POST /process_frame/upload   → multipart variant
-    POST /analyze_vitals         → vitals risk classification
-    POST /process_event          → full pipeline + alert if needed
-
-    GET  /incidents              → all incidents (doctor only)
-    GET  /incidents/{patient_id} → incidents for a specific patient (doctor or own)
-    GET  /vitals                 → all vitals (doctor only)
-    GET  /vitals/{patient_id}    → vitals for a specific patient (doctor or own)
-    GET  /stats                  → fall counts (doctor sees all, family sees own)
-    GET  /health                 → system status (public)
-"""
-
 import sys
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 
-import uuid
-
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.security import OAuth2PasswordRequestForm
+from fastapi import APIRouter, HTTPException, UploadFile, File
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional
 
 _ROOT = Path(__file__).resolve().parent.parent.parent
 if str(_ROOT) not in sys.path:
@@ -37,15 +13,10 @@ if str(_ROOT) not in sys.path:
 import Db
 from guardiancare_api.utils.video_utils import decode_base64_frame, bytes_to_frame
 from guardiancare_api.utils.logger import get_logger
-from guardiancare_api.auth import (
-    verify_password, create_access_token,
-    get_current_user, require_doctor,
-)
 
 log = get_logger(__name__)
 router = APIRouter()
 
-# ── Service instances injected from main.py ────────────────────────────────
 _detection_svc   = None
 _recognition_svc = None
 _vitals_svc      = None
@@ -65,7 +36,12 @@ def inject_services(detection, recognition, vitals, decision, alert):
     _models_loaded   = True
 
 
-# ── Pydantic schemas ───────────────────────────────────────────────────────
+def _require_services():
+    if not _models_loaded:
+        raise HTTPException(503, "Models are still loading. Try again in a moment.")
+
+
+# ── Pydantic models ────────────────────────────────────────────────────────────
 
 class VitalsInput(BaseModel):
     heart_rate:        float = Field(..., gt=0)
@@ -89,131 +65,14 @@ class ProcessEventRequest(BaseModel):
     diastolic_bp:      float
 
 
-class CreateUserRequest(BaseModel):
-    email:      str
-    password:   str = Field(..., min_length=6)
-    role:       Literal["doctor", "family"]
-    patient_id: Optional[str] = None
+class AddPatientRequest(BaseModel):
+    name: str = Field(..., min_length=1)
+    room: Optional[str] = None
 
 
-class RegisterRequest(BaseModel):
-    token:    str
-    email:    str
-    password: str = Field(..., min_length=6)
+# ── Health ─────────────────────────────────────────────────────────────────────
 
-
-# ── Helper ─────────────────────────────────────────────────────────────────
-
-def _require_services():
-    if not _models_loaded:
-        raise HTTPException(503, "Models are still loading. Try again in a moment.")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Auth
-# ══════════════════════════════════════════════════════════════════════════════
-
-@router.post("/auth/login", summary="Login and get JWT token")
-async def login(form: OAuth2PasswordRequestForm = Depends()):
-    user = Db.get_user_by_email(form.username)
-    if not user or not verify_password(form.password, user["password_hash"]):
-        raise HTTPException(
-            status_code=401,
-            detail="Invalid email or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
-    token = create_access_token({"sub": user["id"], "role": user["role"]})
-    return {"access_token": token, "token_type": "bearer"}
-
-
-@router.post("/users", summary="Create a new user — doctor only", status_code=201)
-async def create_user(req: CreateUserRequest,
-                      doctor: dict = Depends(require_doctor)):
-    # family يجب أن يكون عنده patient_id
-    if req.role == "family" and not req.patient_id:
-        raise HTTPException(422, "patient_id required for family role")
-
-    # تحقق أن المريض موجود
-    if req.patient_id and not Db.get_patient_by_id(req.patient_id):
-        raise HTTPException(404, f"Patient '{req.patient_id}' not found")
-
-    if Db.email_exists(req.email):
-        raise HTTPException(409, "Email already registered")
-
-    from guardiancare_api.auth import pwd_context
-    new_id = str(uuid.uuid4())[:8]
-    Db.create_user(
-        user_id=new_id,
-        email=req.email,
-        password_hash=pwd_context.hash(req.password),
-        role=req.role,
-        patient_id=req.patient_id,
-    )
-    return {"id": new_id, "email": req.email, "role": req.role,
-            "patient_id": req.patient_id}
-
-
-@router.post("/invite", summary="Generate invite link — doctor only", status_code=201)
-async def create_invite(patient_id: str,
-                        doctor: dict = Depends(require_doctor)):
-    if not Db.get_patient_by_id(patient_id):
-        raise HTTPException(404, f"Patient '{patient_id}' not found")
-
-    token      = str(uuid.uuid4())
-    expires_at = (datetime.now() + timedelta(hours=48)).strftime("%Y-%m-%d %H:%M:%S")
-    Db.create_invite(token, patient_id, expires_at)
-
-    return {
-        "token":      token,
-        "patient_id": patient_id,
-        "expires_at": expires_at,
-        "register_url": f"/register?token={token}",
-    }
-
-
-@router.post("/register", summary="Register using an invite token", status_code=201)
-async def register(req: RegisterRequest):
-    invite = Db.get_invite(req.token)
-
-    if not invite:
-        raise HTTPException(400, "Invalid invite token")
-    if invite["used"]:
-        raise HTTPException(400, "Invite already used")
-    if datetime.now() > datetime.strptime(invite["expires_at"], "%Y-%m-%d %H:%M:%S"):
-        raise HTTPException(400, "Invite expired")
-    if Db.email_exists(req.email):
-        raise HTTPException(409, "Email already registered")
-
-    from guardiancare_api.auth import pwd_context
-    new_id = str(uuid.uuid4())[:8]
-    Db.create_user(
-        user_id=new_id,
-        email=req.email,
-        password_hash=pwd_context.hash(req.password),
-        role="family",
-        patient_id=invite["patient_id"],
-    )
-    Db.mark_invite_used(req.token)
-
-    return {"id": new_id, "email": req.email,
-            "role": "family", "patient_id": invite["patient_id"]}
-
-
-@router.get("/auth/me", summary="Current user info")
-async def me(user: dict = Depends(get_current_user)):
-    return {
-        "id":         user["id"],
-        "email":      user["email"],
-        "role":       user["role"],
-        "patient_id": user.get("patient_id"),
-    }
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  Health (public)
-# ══════════════════════════════════════════════════════════════════════════════
-
-@router.get("/health", summary="System health check")
+@router.get("/health")
 async def health():
     return {
         "status":        "ok",
@@ -222,13 +81,10 @@ async def health():
     }
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  POST /process_frame
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Fall detection ─────────────────────────────────────────────────────────────
 
-@router.post("/process_frame", summary="Fall detection + face recognition")
-async def process_frame(req: ProcessFrameRequest,
-                        user: dict = Depends(get_current_user)):
+@router.post("/process_frame")
+async def process_frame(req: ProcessFrameRequest):
     _require_services()
     try:
         frame = decode_base64_frame(req.frame_b64)
@@ -246,9 +102,8 @@ async def process_frame(req: ProcessFrameRequest,
     }
 
 
-@router.post("/process_frame/upload", summary="Fall detection via multipart upload")
-async def process_frame_upload(file: UploadFile = File(...),
-                               user: dict = Depends(get_current_user)):
+@router.post("/process_frame/upload")
+async def process_frame_upload(file: UploadFile = File(...)):
     _require_services()
     try:
         raw   = await file.read()
@@ -267,13 +122,10 @@ async def process_frame_upload(file: UploadFile = File(...),
     }
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  POST /analyze_vitals
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Vitals ─────────────────────────────────────────────────────────────────────
 
-@router.post("/analyze_vitals", summary="Vitals risk classification")
-async def analyze_vitals(req: VitalsInput,
-                         user: dict = Depends(get_current_user)):
+@router.post("/analyze_vitals")
+async def analyze_vitals(req: VitalsInput):
     _require_services()
 
     vitals_dict = {
@@ -300,6 +152,14 @@ async def analyze_vitals(req: VitalsInput,
             risk_level=result["risk_level"],
             confidence=result["confidence"],
         )
+        # Treat High Risk vitals as an incident
+        if result["risk_level"] == "High Risk":
+            Db.log_incident(
+                person_name=patient_name,
+                patient_id=patient_id,
+                alert_sent=False,
+            )
+            log.warning(f"High Risk vitals → incident logged for {patient_name}")
 
     return {
         "risk_level":  result["risk_level"],
@@ -308,13 +168,10 @@ async def analyze_vitals(req: VitalsInput,
     }
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  POST /process_event
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Full pipeline ──────────────────────────────────────────────────────────────
 
-@router.post("/process_event", summary="Full pipeline: fall + face + vitals + alert")
-async def process_event(req: ProcessEventRequest,
-                        user: dict = Depends(get_current_user)):
+@router.post("/process_event")
+async def process_event(req: ProcessEventRequest):
     _require_services()
 
     try:
@@ -352,12 +209,64 @@ async def process_event(req: ProcessEventRequest,
     return output
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  GET /vitals  (role-based)
-# ══════════════════════════════════════════════════════════════════════════════
+# ── Data endpoints ─────────────────────────────────────────────────────────────
 
-@router.get("/vitals", summary="All vitals readings — doctor only")
-async def get_vitals(user: dict = Depends(require_doctor)):
+@router.get("/incidents")
+async def get_incidents():
+    try:
+        rows = Db.get_all_incidents()
+        return [
+            {
+                "id":         r["id"],
+                "name":       r["person_name"],
+                "timestamp":  r["timestamp"],
+                "confidence": 0,
+                "snapshot":   r.get("image_path"),
+            }
+            for r in rows
+        ]
+    except Exception as exc:
+        log.error(f"/incidents error: {exc}")
+        raise HTTPException(500, "Database error")
+
+
+@router.get("/incidents/{patient_id}")
+async def get_incidents_by_patient(patient_id: str):
+    try:
+        rows = Db.get_incidents_by_patient(patient_id)
+        return [
+            {
+                "id":         r["id"],
+                "name":       r["person_name"],
+                "timestamp":  r["timestamp"],
+                "confidence": 0,
+                "snapshot":   r.get("image_path"),
+            }
+            for r in rows
+        ]
+    except Exception as exc:
+        log.error(f"/incidents/{{patient_id}} error: {exc}")
+        raise HTTPException(500, "Database error")
+
+
+@router.get("/stats")
+async def get_stats():
+    try:
+        rows = Db.get_fall_counts()
+        return [
+            {
+                "name":  r["person_name"],
+                "count": r["total_falls"],
+            }
+            for r in rows
+        ]
+    except Exception as exc:
+        log.error(f"/stats error: {exc}")
+        raise HTTPException(500, "Database error")
+
+
+@router.get("/vitals")
+async def get_vitals():
     try:
         return Db.get_all_vitals()
     except Exception as exc:
@@ -365,62 +274,34 @@ async def get_vitals(user: dict = Depends(require_doctor)):
         raise HTTPException(500, "Database error")
 
 
-@router.get("/vitals/{patient_id}", summary="Vitals for a specific patient")
-async def get_vitals_by_patient(patient_id: str,
-                                user: dict = Depends(get_current_user)):
-    if user["role"] != "doctor" and user.get("patient_id") != patient_id:
-        raise HTTPException(403, "Access denied")
+@router.get("/vitals/{patient_id}")
+async def get_vitals_by_patient(patient_id: str):
     try:
-        rows = Db.get_vitals_by_patient(patient_id)
-        if not rows:
-            raise HTTPException(404, f"No vitals found for patient '{patient_id}'")
-        return rows
-    except HTTPException:
-        raise
+        return Db.get_vitals_by_patient(patient_id)
     except Exception as exc:
         log.error(f"/vitals/{{patient_id}} error: {exc}")
         raise HTTPException(500, "Database error")
 
 
-# ══════════════════════════════════════════════════════════════════════════════
-#  GET /incidents  (role-based)
-# ══════════════════════════════════════════════════════════════════════════════
+@router.get("/patients")
+async def get_patients():
+    return Db.get_all_patients()
 
-@router.get("/incidents", summary="All incidents — doctor only")
-async def get_incidents(user: dict = Depends(require_doctor)):
+
+@router.post("/patients", status_code=201)
+async def add_patient(req: AddPatientRequest):
+    import uuid
+    patient_id = str(uuid.uuid4())[:8]
+    device_id  = f"watch_{patient_id}"
+    Db.add_patient(patient_id, req.name, req.room or "")
+    Db.add_device(device_id, patient_id)
+    return {"id": patient_id, "name": req.name, "room": req.room or "", "device_id": device_id}
+
+
+@router.get("/devices")
+async def get_devices():
     try:
-        return Db.get_all_incidents()
+        return Db.get_all_devices()
     except Exception as exc:
-        log.error(f"/incidents error: {exc}")
-        raise HTTPException(500, "Database error")
-
-
-@router.get("/incidents/{patient_id}", summary="Incidents for a specific patient")
-async def get_incidents_by_patient(patient_id: str,
-                                   user: dict = Depends(get_current_user)):
-    if user["role"] != "doctor" and user.get("patient_id") != patient_id:
-        raise HTTPException(403, "Access denied")
-    try:
-        rows = Db.get_incidents_by_patient(patient_id)
-        if not rows:
-            raise HTTPException(404, f"No incidents found for patient '{patient_id}'")
-        return rows
-    except HTTPException:
-        raise
-    except Exception as exc:
-        log.error(f"/incidents/{{patient_id}} error: {exc}")
-        raise HTTPException(500, "Database error")
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-#  GET /stats  (role-based)
-# ══════════════════════════════════════════════════════════════════════════════
-
-@router.get("/stats", summary="Fall counts — doctor sees all, family sees own")
-async def get_stats(user: dict = Depends(get_current_user)):
-    try:
-        return Db.get_fall_counts(role=user["role"],
-                                  patient_id=user.get("patient_id"))
-    except Exception as exc:
-        log.error(f"/stats error: {exc}")
+        log.error(f"/devices error: {exc}")
         raise HTTPException(500, "Database error")

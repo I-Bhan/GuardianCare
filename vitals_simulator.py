@@ -18,11 +18,18 @@ BASE_URL    = "http://127.0.0.1:8000"
 DATASET     = "human_vital_signs_dataset_2024.csv"
 INTERVAL    = 5  # seconds between readings
 
-# ── Devices list ──────────────────────────────────────────────────────────────
-DEVICES = [
-    {"device_id": "watch_001", "patient_id": "p001", "name": "Abdulrahaman"},
-    {"device_id": "watch_002", "patient_id": "p002", "name": "Aziz"},
-]
+
+def load_devices_from_api() -> list[dict]:
+    try:
+        resp = requests.get(f"{BASE_URL}/devices", timeout=10)
+        resp.raise_for_status()
+        return [
+            {"device_id": d["device_id"], "patient_id": d["patient_id"], "name": d["name"]}
+            for d in resp.json()
+        ]
+    except Exception as e:
+        print(f"❌ Failed to load devices from API: {e}")
+        return []
 
 
 # ── Load dataset once ─────────────────────────────────────────────────────────
@@ -89,9 +96,15 @@ def simulate_device(device: dict, df: pd.DataFrame):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 def main():
+    # Load devices from API
+    devices = load_devices_from_api()
+    if not devices:
+        print("❌ No devices found. Make sure the API is running and patients are registered.")
+        return
+
     print("=" * 60)
     print("  GuardianCare — Vitals Simulator")
-    print(f"  Devices: {len(DEVICES)} | Interval: {INTERVAL}s")
+    print(f"  Devices: {len(devices)} | Interval: {INTERVAL}s")
     print("  Press Ctrl+C to stop")
     print("=" * 60)
 
@@ -100,7 +113,7 @@ def main():
 
     # Start a thread per device with random stagger
     threads = []
-    for device in DEVICES:
+    for device in devices:
         t = threading.Thread(
             target=simulate_device,
             args=(device, df),
