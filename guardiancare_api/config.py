@@ -32,6 +32,6 @@ FALL_CLASS_NAME     = "Fall-Detected"
 DEEPFACE_THRESHOLD  = float(os.getenv("DEEPFACE_THRESHOLD", "0.25"))
 
 # Auth
-JWT_SECRET_KEY     = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
-JWT_EXPIRE_MINUTES = int(os.getenv("JWT_EXPIRE_MINUTES", "1440"))
-ALLOWED_ORIGINS    = os.getenv("ALLOWED_ORIGINS", "*").split(",")
+SUPABASE_URL = os.getenv("SUPABASE_URL", "https://aaefunchgdshcbtadoyc.supabase.co")
+JWKS_URL     = f"{SUPABASE_URL}/auth/v1/.well-known/jwks.json"
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "*").split(",")

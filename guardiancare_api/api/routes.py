@@ -2,7 +2,8 @@ import sys
 from pathlib import Path
 from datetime import datetime
 
-from fastapi import APIRouter, HTTPException, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from guardiancare_api.auth import verify_token
 from pydantic import BaseModel, Field
 from typing import Optional
 
@@ -15,7 +16,7 @@ from guardiancare_api.utils.video_utils import decode_base64_frame, bytes_to_fra
 from guardiancare_api.utils.logger import get_logger
 
 log = get_logger(__name__)
-router = APIRouter()
+router = APIRouter(dependencies=[Depends(verify_token)])
 
 _detection_svc   = None
 _recognition_svc = None
