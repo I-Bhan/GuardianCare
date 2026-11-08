@@ -1,37 +1,39 @@
 # GuardianCare
 
-منصة لمتابعة المرضى تجمع بين كشف السقوط بالفيديو وقراءات المؤشرات الحيوية. تعرض لوحة المتابعة آخر قراءة لكل مريض، واتجاه المؤشرات، وسجل الحوادث. يستخدم المشروع SQLite للمرضى والقراءات والحوادث، وSupabase لتسجيل الدخول والملفات الشخصية وتعيينات مقدّمي الرعاية.
+GuardianCare combines video fall detection with vital sign monitoring. The dashboard shows each patient's latest readings, trends, and incident history. SQLite stores patient records, readings, and incidents locally. Supabase handles sign-in, profiles, and caregiver assignments.
 
-## تشغيل النسخة الموجودة على جهازك
+## Run locally on Windows
 
-افتح نافذتي PowerShell. في النافذة الأولى شغّل الـAPI باستخدام مفسّر المشروع حتى يستخدم مكتبات النماذج المثبتة معه.
+For a fresh checkout, complete [first-time setup](#first-time-setup) first. These commands assume you cloned the repository into `$env:USERPROFILE\Projects\GuardianCare`. Adjust the path if you use another location.
+
+Open two PowerShell windows. In the first, start the API with the project's Python interpreter.
 
 ```powershell
 cd "$env:USERPROFILE\Projects\GuardianCare"
 .\.venv\Scripts\python.exe -m uvicorn guardiancare_api.main:app --host 127.0.0.1 --port 8001
 ```
 
-انتظر ظهور `Application startup complete`. أثناء تطوير كود Python يمكنك إضافة `--reload` إلى الأمر.
+Wait for `Application startup complete`. During Python development, add `--reload` to restart the API when source files change.
 
-في النافذة الثانية شغّل الموقع.
+In the second window, start the frontend.
 
 ```powershell
 cd "$env:USERPROFILE\Projects\GuardianCare\frontend"
 npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
-| ما تريد فتحه | الرابط على اللابتوب |
-|---|---|
-| الموقع وتسجيل الدخول | [GuardianCare](http://127.0.0.1:5173/) |
-| لوحة المرضى | [Dashboard](http://127.0.0.1:5173/dashboard) |
-| حالة الخادم | [Health](http://127.0.0.1:8001/health) |
-| توثيق الطلبات والنماذج | [API docs](http://127.0.0.1:8001/docs) |
+| Page | Local link |
+| --- | --- |
+| Website and sign-in | [GuardianCare](http://127.0.0.1:5173/) |
+| Patient monitoring | [Dashboard](http://127.0.0.1:5173/dashboard) |
+| API status | [Health check](http://127.0.0.1:8001/health) |
+| Endpoints and request formats | [API documentation](http://127.0.0.1:8001/docs) |
 
-اترك النافذتين مفتوحتين أثناء الاستخدام. لإيقاف أي خدمة اضغط `Ctrl+C` في نافذتها. المنفذ `8001` مخصّص لـGuardianCare في هذا الإعداد حتى تقدر تشغّل مشروع العقود على `8000` في نفس الوقت.
+Keep both windows open while using the site. Press `Ctrl+C` in the corresponding window to stop a service. GuardianCare uses port `8001`, leaving `8000` available for another application.
 
-## إعداد نسخة جديدة
+## First-time setup
 
-الأوامر التالية تبدأ من جذر المشروع. البيئة المستخدمة محليًا هي Python 3.11 وNode.js 24. ملفات اعتماد JavaScript وقفل الإصدارات موجودة داخل `frontend/`.
+The local development environment uses Python 3.11 and Node.js 24. Run these commands from the repository root. The JavaScript dependencies and lockfile are in `frontend/`.
 
 ```powershell
 py -3.11 -m venv .venv
@@ -41,54 +43,54 @@ if (!(Test-Path .env)) { Copy-Item .env.example .env }
 if (!(Test-Path frontend/.env)) { Copy-Item frontend/.env.example frontend/.env }
 ```
 
-| الملف | الإعداد | الاستخدام |
-|---|---|---|
-| `.env` | `SUPABASE_URL` | عنوان مشروع Supabase الذي يتحقق منه الخادم عند تسجيل الدخول. |
-| `frontend/.env` | `VITE_SUPABASE_URL`، `VITE_SUPABASE_ANON_KEY` | نفس عنوان المشروع ومفتاحه العام للمتصفح. |
-| `frontend/.env` | `VITE_API_BASE_URL` | عنوان API المحلي، وقيمته هنا `http://127.0.0.1:8001`. |
-| `.env` | `SIMULATOR_API_KEY` | مفتاح خاص تختاره للمحاكي وفحص مسارات الـAPI المحمية. |
-| `.env` | `BOT_TOKEN`، `CHAT_ID` | إعدادات اختيارية لإرسال تنبيهات Telegram. |
+| File | Variable | Purpose |
+| --- | --- | --- |
+| `.env` | `SUPABASE_URL` | Supabase project URL the API uses to verify sessions. |
+| `frontend/.env` | `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` | The same project URL and its public anon key for the browser. |
+| `frontend/.env` | `VITE_API_BASE_URL` | Local API address, normally `http://127.0.0.1:8001`. |
+| `.env` | `SIMULATOR_API_KEY` | Private key you choose for the simulator and integration checks. |
+| `.env` | `BOT_TOKEN`, `CHAT_ID` | Optional Telegram bot token and destination chat for alerts. |
 
-عند إعداد مشروع Supabase جديد، شغّل [ملف إنشاء الجداول والصلاحيات](frontend/supabase/migrations/001_initial.sql) مرة واحدة في SQL Editor. يستخدم الخادم مفاتيح التوقيع `ES256` للتحقق من جلسات المستخدمين. احتفظ بالمفاتيح الخاصة في ملف الخادم. متغيّرات `VITE_*` تصل إلى المتصفح.
+For a new Supabase project, run the [initial SQL migration](frontend/supabase/migrations/001_initial.sql) once in the SQL Editor to create the tables and access policies. The API verifies sessions using the project's ES256 signing keys. Keep private keys in the backend environment file. Vite exposes `VITE_*` variables to the browser.
 
-### ملفات النماذج والبيانات
+### Models and local data
 
-| المسار | متى تحتاجه |
-|---|---|
-| `models/fall_det_1.pt` | أوزان YOLO لكشف السقوط، مرفقة بالمستودع. يمكن تعيين نموذج آخر عبر `MODEL_PATH` في `.env`. |
-| `models/vitals_model.pkl`، `models/vitals_scaler.pkl`، `models/vitals_labels.pkl` | ملفات مصنّف المؤشرات الحيوية الجاهز، مرفقة معًا في المستودع. |
-| `data/human_vital_signs_dataset_2024.csv` | بيانات التدريب ومحاكاة الساعات. يمكن تشغيل اللوحة بالنماذج الجاهزة دون ملف التدريب. |
-| `known_faces/` | صور اختيارية للتعرّف على الوجه بصيغة مثل `Name_1.jpg`. |
-| `data/guardiancare.db` | قاعدة SQLite المحلية. ينشئها التطبيق عند أول تشغيل. استخدم قاعدة النسخة الحالية إذا أردت سجلّها السابق. |
+| Path | Purpose |
+| --- | --- |
+| `models/fall_det_1.pt` | YOLO fall detection weights included in the repository. Set `MODEL_PATH` in `.env` to use a different model. |
+| `models/vitals_model.pkl`, `models/vitals_scaler.pkl`, `models/vitals_labels.pkl` | The trained vital signs classifier, scaler, and labels. All three ship with the project. |
+| `data/human_vital_signs_dataset_2024.csv` | Supply this CSV to train the classifier or run the smartwatch simulator. The dashboard uses the included models. |
+| `known_faces/` | Optional reference photos for face recognition. Use filenames such as `Name_1.jpg`. |
+| `data/guardiancare.db` | SQLite database created on first run. When moving an installation, copy its existing database to retain its history. |
 
-بعد تنزيل المشروع وإعداد ملفّي البيئة، يمكنك تشغيل الخادم بالنماذج المرفقة. يحتفظ كل تثبيت بقاعدة SQLite وصور الوجوه والتنبيهات محليًا. للتدريب أو تشغيل محاكي الساعات، أضف ملف CSV في المسار الموضّح أعلاه.
+Each installation keeps its database, reference photos, and alert snapshots locally.
 
-## خريطة الكود
+## Project layout
 
-| المسار | المسؤولية |
-|---|---|
-| `guardiancare_api/main.py` و`api/routes.py` داخل الحزمة | بدء FastAPI وتحميل النماذج وتعريف المسارات. |
-| `guardiancare_api/config.py` و`database.py` داخل الحزمة | قراءة إعدادات المشروع وتحديد المسارات والوصول إلى SQLite. |
-| `guardiancare_api/models/` و`guardiancare_api/services/` | تشغيل النماذج، اتخاذ قرار التنبيه، وإرسال رسائل Telegram. |
-| `scripts/` | أدوات الفيديو وتدريب النموذج ومحاكاة قراءات الساعات. |
-| `tests/test_api.py` | فحص التكامل مع الخادم المحلي. |
-| [frontend/](frontend/README.md) | واجهة React ولوحة المتابعة والإدارة. |
-| `alerts/` و`logs/` | لقطات التنبيه وسجلات تشغيل الخادم. |
+| Path | Responsibility |
+| --- | --- |
+| `guardiancare_api/main.py`, `guardiancare_api/api/routes.py` | FastAPI startup, model loading, and HTTP endpoints. |
+| `guardiancare_api/config.py`, `guardiancare_api/database.py` | Configuration, file paths, and SQLite access. |
+| `guardiancare_api/models/`, `guardiancare_api/services/` | Model inference, alert decisions, and Telegram delivery. |
+| `scripts/` | Video detection, classifier training, and smartwatch simulation. |
+| `tests/test_api.py` | Integration checks against a running API. |
+| [frontend/](frontend/README.md) | React website, monitoring dashboard, and administration panel. |
+| `alerts/`, `logs/` | Alert snapshots and server logs. |
 
-## أدوات المشروع
+## Development commands
 
-شغّل الأدوات من الجذر بمفسّر المشروع. المحاكي يولّد قراءات تُكتب في قاعدة الخادم المستهدف، وقد تظهر في سجل الحوادث. التدريب يكتب ملفات النموذج الثلاثة في `models/`.
+Run these commands from the repository root. The simulator writes readings to the target API's database and can generate incidents. Training writes the three classifier files to `models/`.
 
-| الغرض | أمر PowerShell |
-|---|---|
-| محاكاة ساعات المرضى بعد تشغيل الـAPI | `.\.venv\Scripts\python.exe -m scripts.vitals_simulator` |
-| تدريب مصنّف المؤشرات من ملف CSV | `.\.venv\Scripts\python.exe -m scripts.train_vitals` |
-| كشف السقوط من الفيديو المحلي `videos/fall.mp4` | `.\.venv\Scripts\python.exe -m scripts.video`، ثم `q` للخروج |
-| فحص الـAPI بعد تشغيله وضبط مفتاح المحاكي | `.\.venv\Scripts\python.exe -m tests.test_api` |
-| فحص الواجهة وبناؤها | `npm.cmd --prefix frontend run lint` ثم `npm.cmd --prefix frontend run build` |
+| Task | PowerShell command |
+| --- | --- |
+| Simulate smartwatch readings with the API running | `.\.venv\Scripts\python.exe -m scripts.vitals_simulator` |
+| Train the classifier from the CSV | `.\.venv\Scripts\python.exe -m scripts.train_vitals` |
+| Detect falls in `videos/fall.mp4` | `.\.venv\Scripts\python.exe -m scripts.video` (press `q` to quit) |
+| Check the running API after setting the simulator key | `.\.venv\Scripts\python.exe -m tests.test_api` |
+| Lint and build the frontend | `npm.cmd --prefix frontend run lint` followed by `npm.cmd --prefix frontend run build` |
 
-## إذا ظهرت مشكلة
+## Troubleshooting
 
-- **الموقع يفتح ولا يحمّل البيانات** — افتح [حالة الخادم](http://127.0.0.1:8001/health). إذا فتح الرابط، تأكد أن `VITE_API_BASE_URL` يشير لنفس المنفذ، ثم أعد تشغيل Vite بعد تعديل ملف البيئة.
-- **تظهر استجابة 401** — سجّل الدخول للموقع وتأكد أن ملفّي البيئة يشيران لنفس مشروع Supabase. للمحاكي والفحص، تأكد أن الخادم قرأ `SIMULATOR_API_KEY` بعد آخر تعديل.
-- **PowerShell لا يجد ملفًا أو مكتبة** — نفّذ `Get-Location`. الجذر الصحيح يحتوي على `guardiancare_api` و`frontend` و`requirements.txt`. استخدم المسار الكامل لمفسّر `.venv` كما في أمر التشغيل.
+- **The site opens but data fails to load.** Open the [health check](http://127.0.0.1:8001/health). If it responds, confirm that `VITE_API_BASE_URL` uses the same port. Restart Vite after changing `frontend/.env`.
+- **The API returns 401.** Sign in and check that both environment files point to the same Supabase project. For the simulator or integration checks, restart the API after changing `SIMULATOR_API_KEY`.
+- **PowerShell cannot find a file or Python package.** Run `Get-Location`. The repository root contains `guardiancare_api/`, `frontend/`, and `requirements.txt`. Use the project's `.venv` interpreter shown in the startup command.
