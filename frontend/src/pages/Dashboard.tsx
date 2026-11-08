@@ -5,9 +5,12 @@ import {
 } from 'recharts'
 import {
   AlertTriangle, Users, RefreshCw, Clock, ShieldAlert,
-  Heart, Thermometer, Wind, Activity, ChevronDown, ChevronUp,
+  Heart, Activity, Star,
 } from 'lucide-react'
-import { useAuth }      from '../context/AuthContext'
+import PatientRoster from '../components/PatientRoster'
+import IncidentLog from '../components/IncidentLog'
+import { formatReadingTime as fmt, riskInfo, useMonitoringStars, type StarList } from '../components/monitoring'
+import { useAuth }      from '../hooks/useAuth'
 import { useIncidents } from '../hooks/useIncidents'
 import { supabase }     from '../lib/supabase'
 import { fetchVitals, fetchPatients } from '../lib/api'
@@ -15,78 +18,57 @@ import type { Incident, VitalsReading, Patient } from '../lib/api'
 
 // ── helpers ────────────────────────────────────────────────────────────────
 
-function fmt(ts: string) {
-  return new Date(ts).toLocaleString('en-US', {
-    month: 'short', day: 'numeric',
-    hour: '2-digit', minute: '2-digit',
-  })
-}
-
 function fmtTime(ts: string) {
   return new Date(ts).toLocaleTimeString('en-US', {
     hour: '2-digit', minute: '2-digit',
   })
 }
 
-function riskBadge(level: string) {
-  if (level === 'High Risk')   return 'bg-red-100   text-red-700   border-red-200'
-  if (level === 'Medium Risk') return 'bg-amber-100 text-amber-700 border-amber-200'
-  return 'bg-emerald-50 text-emerald-700 border-emerald-200'
-}
-
-function riskBorder(level: string) {
-  if (level === 'High Risk')   return 'border-l-red-400'
-  if (level === 'Medium Risk') return 'border-l-amber-400'
-  return 'border-l-emerald-400'
-}
-
 // ── sub-components ─────────────────────────────────────────────────────────
 
 function StatCard({
-  icon, value, label, sub, color,
+  icon, value, label, sub, alert,
 }: {
   icon: React.ReactNode
   value: number | string
   label: string
   sub?: string
-  color: string
+  alert?: boolean
 }) {
   return (
-    <div className={`card flex items-center gap-4 border-l-4 ${color}`}>
-      <div className="bg-navy/5 p-3 rounded-xl">{icon}</div>
-      <div className="min-w-0">
-        <p className="text-2xl font-bold text-navy leading-none">{value}</p>
-        <p className="text-sm text-slate mt-0.5">{label}</p>
-        {sub && <p className="text-xs text-slate/70 mt-0.5">{sub}</p>}
-      </div>
+    <div className={'overview-cell' + (alert ? ' overview-alert' : '')}>
+      <div className="overview-label"><span>{label}</span>{icon}</div>
+      <div className="overview-reading"><strong>{value}</strong>{sub && <span>{sub}</span>}</div>
     </div>
   )
 }
 
-function PatientVitalCard({ v }: { v: VitalsReading }) {
+function PatientVitalCard({ v, stars }: { v: VitalsReading; stars: StarList }) {
   const metrics = [
-    { icon: <Heart size={13} />,       label: 'HR',   value: `${v.heart_rate} bpm` },
-    { icon: <Wind size={13} />,        label: 'SpO₂', value: `${v.oxygen_saturation}%` },
-    { icon: <Thermometer size={13} />, label: 'Temp', value: `${v.body_temperature}°C` },
-    { icon: <Activity size={13} />,    label: 'BP',   value: `${v.systolic_bp}/${v.diastolic_bp}` },
+    { label: 'HR',   name: 'Heart rate', value: v.heart_rate, unit: 'bpm' },
+    { label: 'SpO₂', name: 'Oxygen', value: v.oxygen_saturation, unit: '%' },
+    { label: 'Temp', name: 'Temperature', value: v.body_temperature, unit: '°C' },
+    { label: 'BP',   name: 'Blood pressure', value: `${v.systolic_bp}/${v.diastolic_bp}`, unit: 'mmHg' },
   ]
   return (
-    <div className={`card border-l-4 ${riskBorder(v.risk_level)} p-4`}>
-      <div className="flex items-start justify-between mb-3">
+    <div className="vital-tile">
+      <div className="vital-head">
         <div>
-          <p className="font-semibold text-navy text-sm">{v.patient_name}</p>
+          <p className="vital-name">{v.patient_name}</p>
           <p className="text-xs text-slate mt-0.5">{fmt(v.timestamp)}</p>
         </div>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${riskBadge(v.risk_level)}`}>
-          {v.risk_level}
+        <span className={`text-xs px-2 py-0.5 rounded-full font-semibold border ${riskInfo(v.risk_level).css}`}>
+          {riskInfo(v.risk_level).label}
         </span>
       </div>
-      <div className="grid grid-cols-2 gap-y-2 gap-x-3">
-        {metrics.map((m) => (
-          <div key={m.label} className="flex items-center gap-1.5 text-xs text-slate">
-            <span className="text-navy/50">{m.icon}</span>
-            <span className="font-medium text-navy">{m.value}</span>
-            <span className="text-slate/60">{m.label}</span>
+      <div className="vital-measures">
+        {metrics.sort((a, b) => Number(stars.has('metric:' + b.label)) - Number(stars.has('metric:' + a.label))).map((m) => (
+          <div key={m.label} className="vital-measure">
+            <span className="measure-label">{m.name}</span>
+            <button type="button" className="monitor-star metric-star" title={'Prioritize ' + m.label + ' across patients'} aria-label={'Prioritize ' + m.label} aria-pressed={stars.has('metric:' + m.label)} onClick={() => stars.toggle('metric:' + m.label)}>
+              <Star size={14} fill={stars.has('metric:' + m.label) ? 'currentColor' : 'none'} />
+            </button>
+            <span className="measure-value">{m.value}<small>{m.unit}</small></span>
           </div>
         ))}
       </div>
@@ -94,44 +76,14 @@ function PatientVitalCard({ v }: { v: VitalsReading }) {
   )
 }
 
-function IncidentRow({ incident }: { incident: Incident }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <>
-      <tr
-        className="border-b border-slate/10 hover:bg-cream/40 cursor-pointer transition-colors"
-        onClick={() => setOpen(!open)}
-      >
-        <td className="px-4 py-3 text-sm font-medium text-navy">{incident.name}</td>
-        <td className="px-4 py-3 text-sm text-slate">{fmt(incident.timestamp)}</td>
-        <td className="px-4 py-3">
-          <span className="inline-flex items-center gap-1 bg-red-50 text-red-600 text-xs px-2 py-0.5 rounded-full font-medium border border-red-100">
-            <AlertTriangle size={11} /> Alert
-          </span>
-        </td>
-        <td className="px-4 py-3 text-slate">
-          {open ? <ChevronUp size={15} /> : <ChevronDown size={15} />}
-        </td>
-      </tr>
-      {open && incident.snapshot && (
-        <tr className="bg-cream/30">
-          <td colSpan={4} className="px-4 py-3">
-            <img
-              src={`data:image/jpeg;base64,${incident.snapshot}`}
-              alt="snapshot"
-              className="max-h-48 rounded-lg object-contain border border-slate/20"
-            />
-          </td>
-        </tr>
-      )}
-    </>
-  )
+export default function Dashboard() {
+  const { user } = useAuth()
+  return user ? <AccountDashboard key={user.id} userId={user.id} /> : null
 }
 
-// ── main ────────────────────────────────────────────────────────────────────
-
-export default function Dashboard() {
-  const { profile, role, user } = useAuth()
+function AccountDashboard({ userId }: { userId: string }) {
+  const stars = useMonitoringStars(userId)
+  const { role, user } = useAuth()
   const { incidents, stats, loading, error, refresh } = useIncidents()
 
   const [assignedPatients, setAssignedPatients] = useState<string[]>([])
@@ -166,7 +118,16 @@ export default function Dashboard() {
     } catch { /* API not ready */ }
   }, [])
 
-  useEffect(() => { loadVitals(); loadPatients() }, [loadVitals, loadPatients])
+  useEffect(() => {
+    let active = true
+    fetchVitals()
+      .then(({ data }) => { if (active) setAllVitals(data) })
+      .catch(() => { /* API not ready */ })
+    fetchPatients()
+      .then(({ data }) => { if (active) setPatients(data) })
+      .catch(() => { /* API not ready */ })
+    return () => { active = false }
+  }, [])
 
   // ── derived data ────────────────────────────────────────────────────────
   const visibleIncidents: Incident[] =
@@ -189,6 +150,15 @@ export default function Dashboard() {
     role === 'admin'
       ? allLatestVitals
       : allLatestVitals.filter((v) => assignedPatients.includes(v.patient_name))
+
+  // Only associate alerts with identified patients who have one matching registered name.
+  const registeredCounts = new Map<string, number>()
+  for (const p of visiblePatients) registeredCounts.set(p.name, (registeredCounts.get(p.name) ?? 0) + 1)
+  const incidentReadings = new Map(latestVitals.filter(v =>
+    v.patient_name && v.patient_name.toLowerCase() !== 'unknown' && registeredCounts.get(v.patient_name) === 1
+  ).map(v => [v.patient_name, v]))
+  const prioritizedVitals = [...latestVitals].sort((a, b) =>
+    riskInfo(a.risk_level).rank - riskInfo(b.risk_level).rank || Date.parse(b.timestamp) - Date.parse(a.timestamp))
 
   // patient selector
   const patientNames = latestVitals.map((v) => v.patient_name)
@@ -223,21 +193,15 @@ export default function Dashboard() {
     <div className="min-h-screen bg-offwhite">
 
       {/* ── Header ─────────────────────────────────────────────────────── */}
-      <div className="bg-navy text-white px-4 sm:px-8 py-8">
+      <div className="workspace-heading px-4 sm:px-8 py-8">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold">Dashboard</h1>
-            <p className="text-slate text-sm mt-1">
-              Welcome back, <span className="text-white font-medium">{profile?.full_name}</span>
-              <span className="ml-2 bg-sage/20 text-sage text-xs px-2 py-0.5 rounded-full uppercase tracking-wide">
-                {role}
-              </span>
-            </p>
           </div>
           <button
             onClick={handleRefresh}
             disabled={loading}
-            className="flex items-center gap-2 bg-white/10 hover:bg-white/20 text-white text-sm px-4 py-2 rounded-lg transition-colors"
+            className="flex items-center gap-2 workspace-refresh text-sm px-4 py-2 rounded-lg transition-colors"
           >
             <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
             Refresh
@@ -248,68 +212,44 @@ export default function Dashboard() {
       <div className="max-w-7xl mx-auto px-4 sm:px-8 py-8 space-y-8">
 
         {/* ── Stat cards ─────────────────────────────────────────────────── */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <div className="care-overview">
           <StatCard
-            icon={<AlertTriangle size={20} className="text-red-500" />}
-            value={incidents.length}
+            icon={<AlertTriangle size={20} />}
+            value={loading || error ? '—' : visibleIncidents.length}
             label="Total Incidents"
-            color="border-l-red-400"
           />
           <StatCard
-            icon={<Users size={20} className="text-blue-500" />}
-            value={fallCounts.length}
-            label="Monitored Patients"
-            color="border-l-blue-400"
+            icon={<Users size={20} />}
+            value={loading || error ? '—' : fallCounts.length}
+            label="Patients with incidents"
           />
           <StatCard
-            icon={<Clock size={20} className="text-amber-500" />}
-            value={visibleIncidents.filter(i => new Date(i.timestamp).toDateString() === new Date().toDateString()).length}
+            icon={<Clock size={20} />}
+            value={loading || error ? '—' : visibleIncidents.filter(i => new Date(i.timestamp).toDateString() === new Date().toDateString()).length}
             label="Today's Incidents"
-            color="border-l-amber-400"
           />
           <StatCard
-            icon={<ShieldAlert size={20} className="text-emerald-600" />}
+            icon={<ShieldAlert size={20} />}
             value={todayHighRisk}
             label="High Risk Today"
-            sub="from vitals"
-            color="border-l-emerald-400"
+            sub="vital readings"
+            alert={todayHighRisk > 0}
           />
         </div>
 
         {/* ── Registered patients ────────────────────────────────────────── */}
-        {visiblePatients.length > 0 && (
-          <div>
-            <h2 className="text-base font-semibold text-navy mb-3 flex items-center gap-2">
-              <Users size={17} className="text-sage" /> Registered Patients
-            </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {visiblePatients.map((p) => (
-                <div key={p.id} className="card flex items-center gap-3 p-4">
-                  <div className="bg-sage/10 p-2.5 rounded-xl shrink-0">
-                    <Users size={16} className="text-sage" />
-                  </div>
-                  <div className="min-w-0">
-                    <p className="font-semibold text-navy text-sm truncate">{p.name}</p>
-                    {p.room
-                      ? <p className="text-xs text-slate">{p.room}</p>
-                      : <p className="text-xs text-slate/50">No room</p>
-                    }
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
+        {visiblePatients.length > 0 && <PatientRoster patients={visiblePatients} />}
 
         {/* ── Patient vitals cards ────────────────────────────────────────── */}
         {latestVitals.length > 0 && (
           <div>
-            <h2 className="text-base font-semibold text-navy mb-3 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-ink mb-3 flex items-center gap-2">
               <Activity size={17} className="text-sage" /> Current Patient Status
             </h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {latestVitals.map((v) => (
-                <PatientVitalCard key={v.patient_name} v={v} />
+            <p className="mb-3 text-sm text-slate">Highest risk first. Star a vital sign to show it first for every patient.</p>
+            <div className="vital-grid">
+              {prioritizedVitals.map((v) => (
+                <PatientVitalCard key={v.patient_name} v={v} stars={stars} />
               ))}
             </div>
           </div>
@@ -318,40 +258,47 @@ export default function Dashboard() {
         {/* ── Vitals trend chart ──────────────────────────────────────────── */}
         {trendData.length > 1 && (
           <div className="card">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-base font-semibold text-navy flex items-center gap-2">
+            <div className="trend-heading">
+              <h2 className="text-base font-semibold text-ink flex items-center gap-2">
                 <Heart size={17} className="text-sage" /> Vitals Trend
               </h2>
               {patientNames.length > 1 && (
-                <div className="flex gap-1">
+                <>
+                <label className="trend-picker">Patient
+                  <select value={activePatient} onChange={e => setSelectedPatient(e.target.value)}>
+                    {patientNames.map(name => <option key={name} value={name}>{name}</option>)}
+                  </select>
+                </label>
+                <div className="trend-patients">
                   {patientNames.map((name) => (
                     <button
                       key={name}
                       onClick={() => setSelectedPatient(name)}
                       className={`text-xs px-3 py-1 rounded-full border transition-colors ${
                         activePatient === name
-                          ? 'bg-navy text-white border-navy'
-                          : 'text-slate border-slate/30 hover:border-navy/40'
+                          ? 'tone-sage border-sage'
+                          : 'text-slate border-slate/30 hover:border-sage'
                       }`}
                     >
                       {name}
                     </button>
                   ))}
                 </div>
+                </>
               )}
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <LineChart data={trendData} margin={{ top: 4, right: 16, left: -16, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                <XAxis dataKey="time" tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+                <XAxis dataKey="time" tick={{ fontSize: 11 }} stroke="var(--text-soft)" />
+                <YAxis tick={{ fontSize: 11 }} stroke="var(--text-soft)" />
+                <Tooltip cursor={{ stroke: 'var(--field-line)', fill: 'var(--surface-muted)' }}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text)' }}
                 />
                 <Legend wrapperStyle={{ fontSize: 12 }} />
-                <Line type="monotone" dataKey="HR"   stroke="#ef4444" strokeWidth={2} dot={false} name="Heart Rate (bpm)" />
-                <Line type="monotone" dataKey="SpO2" stroke="#3b82f6" strokeWidth={2} dot={false} name="SpO₂ (%)" />
-                <Line type="monotone" dataKey="Temp" stroke="#f59e0b" strokeWidth={2} dot={false} name="Temp (°C)" />
+                <Line type="monotone" dataKey="HR"   stroke="var(--accent)" strokeWidth={2} dot={false} name="Heart Rate (bpm)" />
+                <Line type="monotone" dataKey="SpO2" strokeDasharray="7 3" stroke="var(--chart-blue)" strokeWidth={2} dot={false} name="SpO₂ (%)" />
+                <Line type="monotone" dataKey="Temp" strokeDasharray="2 3" stroke="var(--warning)" strokeWidth={2} dot={false} name="Temp (°C)" />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -360,74 +307,25 @@ export default function Dashboard() {
         {/* ── Fall counts bar chart ───────────────────────────────────────── */}
         {fallCounts.length > 0 && (
           <div className="card">
-            <h2 className="text-base font-semibold text-navy mb-4 flex items-center gap-2">
+            <h2 className="text-base font-semibold text-ink mb-4 flex items-center gap-2">
               <ShieldAlert size={17} className="text-sage" /> Fall Incidents per Patient
             </h2>
             <ResponsiveContainer width="100%" height={160}>
               <BarChart data={fallCounts} margin={{ top: 4, right: 16, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="#94a3b8" />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="#94a3b8" />
-                <Tooltip
-                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid #e2e8f0' }}
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" vertical={false} />
+                <XAxis dataKey="name" tick={{ fontSize: 12 }} stroke="var(--text-soft)" />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="var(--text-soft)" />
+                <Tooltip cursor={{ stroke: 'var(--field-line)', fill: 'var(--surface-muted)' }}
+                  contentStyle={{ fontSize: 12, borderRadius: 8, border: '1px solid var(--line)', background: 'var(--surface)', color: 'var(--text)' }}
                 />
-                <Bar dataKey="count" fill="#5e8c7a" radius={[4, 4, 0, 0]} name="Falls" />
+                <Bar dataKey="count" fill="var(--accent)" radius={[4, 4, 0, 0]} name="Falls" />
               </BarChart>
             </ResponsiveContainer>
           </div>
         )}
 
         {/* ── Incidents log ───────────────────────────────────────────────── */}
-        <div className="card overflow-hidden p-0">
-          <div className="px-6 py-4 border-b border-slate/10 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-navy flex items-center gap-2">
-              <AlertTriangle size={17} className="text-sage" /> Incidents Log
-            </h2>
-            <span className="text-xs text-slate bg-slate/10 px-2 py-0.5 rounded-full">
-              {visibleIncidents.length} records
-            </span>
-          </div>
-
-          {error && (
-            <div className="px-6 py-8 text-center">
-              <p className="text-sm text-red-500 font-medium">{error}</p>
-              <p className="text-xs text-slate mt-1">Make sure the GuardianCare API server is running.</p>
-            </div>
-          )}
-
-          {!error && loading && (
-            <div className="px-6 py-10 text-center">
-              <div className="w-6 h-6 border-2 border-sage border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-              <p className="text-sm text-slate">Loading incidents…</p>
-            </div>
-          )}
-
-          {!error && !loading && visibleIncidents.length === 0 && (
-            <div className="px-6 py-10 text-center text-slate text-sm">
-              No incidents recorded yet.
-            </div>
-          )}
-
-          {!error && !loading && visibleIncidents.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-cream/60 text-left">
-                    <th className="px-4 py-3 text-xs font-semibold text-slate uppercase tracking-wider">Patient</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate uppercase tracking-wider">Time</th>
-                    <th className="px-4 py-3 text-xs font-semibold text-slate uppercase tracking-wider">Type</th>
-                    <th className="px-4 py-3 w-8" />
-                  </tr>
-                </thead>
-                <tbody>
-                  {visibleIncidents.map((inc) => (
-                    <IncidentRow key={inc.id} incident={inc} />
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
+        <IncidentLog incidents={visibleIncidents} readings={incidentReadings} stars={stars} loading={loading} error={error} />
 
       </div>
     </div>

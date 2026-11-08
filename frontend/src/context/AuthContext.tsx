@@ -1,18 +1,9 @@
-import { createContext, useContext, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
 import type { Profile, Role } from '../lib/supabase'
-
-interface AuthContextValue {
-  user:     User | null
-  profile:  Profile | null
-  role:     Role | null
-  loading:  boolean
-  signOut:  () => Promise<void>
-}
-
-const AuthContext = createContext<AuthContextValue | undefined>(undefined)
+import { AuthContext } from './auth-context'
 
 async function loadProfile(user: User): Promise<Profile | null> {
   try {
@@ -45,22 +36,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     // onAuthStateChange fires immediately with INITIAL_SESSION —
     // no need for a separate getSession() call.
+    let revision = 0
+    let pending: number | undefined
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, session) => {
+      (_event, session) => {
+        const current = ++revision
+        window.clearTimeout(pending)
         setLoading(true)
         const currentUser = session?.user ?? null
         setUser(currentUser)
 
         if (currentUser) {
-          const p = await loadProfile(currentUser)
-          setProfile(p)
+          // Start authenticated queries after the auth callback releases its lock.
+          pending = window.setTimeout(async () => {
+            const p = await loadProfile(currentUser)
+            if (current !== revision) return
+            setProfile(p)
+            setLoading(false)
+          }, 0)
         } else {
           setProfile(null)
+          setLoading(false)
         }
-        setLoading(false)
       }
     )
-    return () => subscription.unsubscribe()
+    return () => {
+      revision++
+      window.clearTimeout(pending)
+      subscription.unsubscribe()
+    }
   }, [])
 
   const signOut = async () => {
@@ -74,10 +78,4 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       {children}
     </AuthContext.Provider>
   )
-}
-
-export function useAuth() {
-  const ctx = useContext(AuthContext)
-  if (!ctx) throw new Error('useAuth must be used inside AuthProvider')
-  return ctx
 }

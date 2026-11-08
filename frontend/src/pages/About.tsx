@@ -73,7 +73,7 @@ export default function About() {
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8 items-center">
           <div>
-            <h2 className="text-2xl font-bold text-navy mb-4">Our Mission</h2>
+            <h2 className="text-2xl font-bold text-ink mb-4">Our Mission</h2>
             <p className="text-slate leading-relaxed mb-4">
               Falls are the leading cause of injury among older adults. GuardianCare was built to
               close the gap between an incident happening and a caregiver being notified — reducing
@@ -104,7 +104,7 @@ export default function About() {
       <section className="bg-cream py-16">
         <div className="max-w-5xl mx-auto px-4 sm:px-6">
           <div className="text-center mb-12">
-            <h2 className="text-2xl font-bold text-navy mb-3">The AI Pipeline</h2>
+            <h2 className="text-2xl font-bold text-ink mb-3">The AI Pipeline</h2>
             <p className="text-slate max-w-xl mx-auto">
               From a raw video frame to a caregiver alert — here's how every incident is handled.
             </p>
@@ -116,7 +116,7 @@ export default function About() {
                   <span className="text-xs font-bold text-sage">{step.step}</span>
                   <div className="bg-sage/10 p-2 rounded-lg">{step.icon}</div>
                 </div>
-                <h3 className="font-semibold text-navy mb-2">{step.title}</h3>
+                <h3 className="font-semibold text-ink mb-2">{step.title}</h3>
                 <p className="text-slate text-sm leading-relaxed">{step.description}</p>
               </div>
             ))}
@@ -127,14 +127,14 @@ export default function About() {
       {/* Tech Stack */}
       <section className="max-w-5xl mx-auto px-4 sm:px-6 py-16">
         <div className="text-center mb-10">
-          <h2 className="text-2xl font-bold text-navy mb-3">Technology Stack</h2>
+          <h2 className="text-2xl font-bold text-ink mb-3">Technology Stack</h2>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
           {stack.map((tech) => (
             <div key={tech.name} className="card flex items-center gap-3">
               <div className="w-2 h-2 rounded-full bg-sage flex-shrink-0" />
               <div>
-                <p className="font-medium text-navy text-sm">{tech.name}</p>
+                <p className="font-medium text-ink text-sm">{tech.name}</p>
                 <p className="text-slate text-xs">{tech.role}</p>
               </div>
             </div>

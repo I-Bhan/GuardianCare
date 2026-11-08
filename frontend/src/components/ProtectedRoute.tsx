@@ -1,5 +1,5 @@
 import { Navigate } from 'react-router-dom'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import type { Role } from '../lib/supabase'
 import type { ReactNode } from 'react'
 
@@ -24,11 +24,11 @@ export default function ProtectedRoute({ children, allowedRoles }: Props) {
 
   if (!user) return <Navigate to="/login" replace />
 
-  if (allowedRoles && role && !allowedRoles.includes(role)) {
+  if (allowedRoles && (!role || !allowedRoles.includes(role))) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-offwhite">
         <div className="card text-center max-w-sm">
-          <h2 className="text-navy font-semibold text-lg mb-2">Access Denied</h2>
+          <h2 className="text-ink font-semibold text-lg mb-2">Access Denied</h2>
           <p className="text-slate text-sm">You don't have permission to view this page.</p>
         </div>
       </div>

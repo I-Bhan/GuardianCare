@@ -1,139 +1,94 @@
-# GuardianCare — Fall Detection & Health Monitoring API
+# GuardianCare
 
-A production-ready AI backend that combines **YOLO fall detection**, **DeepFace face recognition**, and a **trained vitals risk classifier** into a single real-time decision pipeline.
+منصة لمتابعة المرضى تجمع بين كشف السقوط بالفيديو وقراءات المؤشرات الحيوية. تعرض لوحة المتابعة آخر قراءة لكل مريض، واتجاه المؤشرات، وسجل الحوادث. يستخدم المشروع SQLite للمرضى والقراءات والحوادث، وSupabase لتسجيل الدخول والملفات الشخصية وتعيينات مقدّمي الرعاية.
 
----
+## تشغيل النسخة الموجودة على جهازك
 
-## Features
+افتح نافذتي PowerShell. في النافذة الأولى شغّل الـAPI باستخدام مفسّر المشروع حتى يستخدم مكتبات النماذج المثبتة معه.
 
-- Real-time fall detection using a custom-trained YOLO model
-- Face recognition to identify who fell (from a known-faces database)
-- Vital signs risk classification (heart rate, SpO2, blood pressure, temperature)
-- Telegram alerts with snapshots when a fall or high-risk vitals are detected
-- SQLite incident logging with a REST API for querying history
-- Two modes: standalone video loop (`video.py`) or FastAPI server
-
----
-
-## Project Structure
-
-```
-Fall_Detection/
-├── guardiancare_api/        # FastAPI application
-│   ├── main.py              # Entry point
-│   ├── config.py            # Central configuration
-│   ├── api/routes.py        # All API endpoints
-│   ├── models/              # AI model wrappers
-│   ├── services/            # Business logic
-│   └── utils/               # Logging, frame encoding
-├── video.py                 # Standalone real-time mode
-├── train_vitals.py          # Train the vitals classifier
-├── vitals_simulator.py      # Simulate smartwatch data
-├── test_api.py              # API test suite
-├── Db.py                    # SQLite database layer
-├── alert.py                 # Telegram alert sender
-└── requirements.txt
+```powershell
+cd "$env:USERPROFILE\Projects\GuardianCare"
+.\.venv\Scripts\python.exe -m uvicorn guardiancare_api.main:app --host 127.0.0.1 --port 8001
 ```
 
----
+انتظر ظهور `Application startup complete`. أثناء تطوير كود Python يمكنك إضافة `--reload` إلى الأمر.
 
-## Setup
+في النافذة الثانية شغّل الموقع.
 
-### 1. Install dependencies
-
-```bash
-pip install -r requirements.txt
+```powershell
+cd "$env:USERPROFILE\Projects\GuardianCare\frontend"
+npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
-### 2. Configure environment
+| ما تريد فتحه | الرابط على اللابتوب |
+|---|---|
+| الموقع وتسجيل الدخول | [GuardianCare](http://127.0.0.1:5173/) |
+| لوحة المرضى | [Dashboard](http://127.0.0.1:5173/dashboard) |
+| حالة الخادم | [Health](http://127.0.0.1:8001/health) |
+| توثيق الطلبات والنماذج | [API docs](http://127.0.0.1:8001/docs) |
 
-```bash
-cp .env.example .env
-# Edit .env and add your Telegram BOT_TOKEN and CHAT_ID
+اترك النافذتين مفتوحتين أثناء الاستخدام. لإيقاف أي خدمة اضغط `Ctrl+C` في نافذتها. المنفذ `8001` مخصّص لـGuardianCare في هذا الإعداد حتى تقدر تشغّل مشروع العقود على `8000` في نفس الوقت.
+
+## إعداد نسخة جديدة
+
+الأوامر التالية تبدأ من جذر المشروع. البيئة المستخدمة محليًا هي Python 3.11 وNode.js 24. ملفات اعتماد JavaScript وقفل الإصدارات موجودة داخل `frontend/`.
+
+```powershell
+py -3.11 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements.txt
+npm.cmd --prefix frontend ci
+if (!(Test-Path .env)) { Copy-Item .env.example .env }
+if (!(Test-Path frontend/.env)) { Copy-Item frontend/.env.example frontend/.env }
 ```
 
-### 3. Add known faces
+| الملف | الإعداد | الاستخدام |
+|---|---|---|
+| `.env` | `SUPABASE_URL` | عنوان مشروع Supabase الذي يتحقق منه الخادم عند تسجيل الدخول. |
+| `frontend/.env` | `VITE_SUPABASE_URL`، `VITE_SUPABASE_ANON_KEY` | نفس عنوان المشروع ومفتاحه العام للمتصفح. |
+| `frontend/.env` | `VITE_API_BASE_URL` | عنوان API المحلي، وقيمته هنا `http://127.0.0.1:8001`. |
+| `.env` | `SIMULATOR_API_KEY` | مفتاح خاص تختاره للمحاكي وفحص مسارات الـAPI المحمية. |
+| `.env` | `BOT_TOKEN`، `CHAT_ID` | إعدادات اختيارية لإرسال تنبيهات Telegram. |
 
-Place photos in `known_faces/` following the naming convention:
-```
-known_faces/
-├── PersonName_1.jpg
-├── PersonName_2.jpg
-└── PersonName_3.jpg
-```
+عند إعداد مشروع Supabase جديد، شغّل [ملف إنشاء الجداول والصلاحيات](frontend/supabase/migrations/001_initial.sql) مرة واحدة في SQL Editor. يستخدم الخادم مفاتيح التوقيع `ES256` للتحقق من جلسات المستخدمين. احتفظ بالمفاتيح الخاصة في ملف الخادم. متغيّرات `VITE_*` تصل إلى المتصفح.
 
-### 4. Train the vitals model
+### ملفات النماذج والبيانات
 
-Download the dataset and place it as `human_vital_signs_dataset_2024.csv`, then:
+| المسار | متى تحتاجه |
+|---|---|
+| `models/fall_det_1.pt` | أوزان YOLO لكشف السقوط، مرفقة بالمستودع. يمكن تعيين نموذج آخر عبر `MODEL_PATH` في `.env`. |
+| `models/vitals_model.pkl`، `models/vitals_scaler.pkl`، `models/vitals_labels.pkl` | ملفات مصنّف المؤشرات الحيوية الجاهز، مرفقة معًا في المستودع. |
+| `data/human_vital_signs_dataset_2024.csv` | بيانات التدريب ومحاكاة الساعات. يمكن تشغيل اللوحة بالنماذج الجاهزة دون ملف التدريب. |
+| `known_faces/` | صور اختيارية للتعرّف على الوجه بصيغة مثل `Name_1.jpg`. |
+| `data/guardiancare.db` | قاعدة SQLite المحلية. ينشئها التطبيق عند أول تشغيل. استخدم قاعدة النسخة الحالية إذا أردت سجلّها السابق. |
 
-```bash
-python train_vitals.py
-```
+بعد تنزيل المشروع وإعداد ملفّي البيئة، يمكنك تشغيل الخادم بالنماذج المرفقة. يحتفظ كل تثبيت بقاعدة SQLite وصور الوجوه والتنبيهات محليًا. للتدريب أو تشغيل محاكي الساعات، أضف ملف CSV في المسار الموضّح أعلاه.
 
-### 5. Add the YOLO model
+## خريطة الكود
 
-Place your trained `fall_det_1.pt` in the project root.
+| المسار | المسؤولية |
+|---|---|
+| `guardiancare_api/main.py` و`api/routes.py` داخل الحزمة | بدء FastAPI وتحميل النماذج وتعريف المسارات. |
+| `guardiancare_api/config.py` و`database.py` داخل الحزمة | قراءة إعدادات المشروع وتحديد المسارات والوصول إلى SQLite. |
+| `guardiancare_api/models/` و`guardiancare_api/services/` | تشغيل النماذج، اتخاذ قرار التنبيه، وإرسال رسائل Telegram. |
+| `scripts/` | أدوات الفيديو وتدريب النموذج ومحاكاة قراءات الساعات. |
+| `tests/test_api.py` | فحص التكامل مع الخادم المحلي. |
+| [frontend/](frontend/README.md) | واجهة React ولوحة المتابعة والإدارة. |
+| `alerts/` و`logs/` | لقطات التنبيه وسجلات تشغيل الخادم. |
 
----
+## أدوات المشروع
 
-## Running
+شغّل الأدوات من الجذر بمفسّر المشروع. المحاكي يولّد قراءات تُكتب في قاعدة الخادم المستهدف، وقد تظهر في سجل الحوادث. التدريب يكتب ملفات النموذج الثلاثة في `models/`.
 
-### Option A — API server (for mobile apps / dashboards)
+| الغرض | أمر PowerShell |
+|---|---|
+| محاكاة ساعات المرضى بعد تشغيل الـAPI | `.\.venv\Scripts\python.exe -m scripts.vitals_simulator` |
+| تدريب مصنّف المؤشرات من ملف CSV | `.\.venv\Scripts\python.exe -m scripts.train_vitals` |
+| كشف السقوط من الفيديو المحلي `videos/fall.mp4` | `.\.venv\Scripts\python.exe -m scripts.video`، ثم `q` للخروج |
+| فحص الـAPI بعد تشغيله وضبط مفتاح المحاكي | `.\.venv\Scripts\python.exe -m tests.test_api` |
+| فحص الواجهة وبناؤها | `npm.cmd --prefix frontend run lint` ثم `npm.cmd --prefix frontend run build` |
 
-```bash
-uvicorn guardiancare_api.main:app --reload
-```
+## إذا ظهرت مشكلة
 
-API docs available at: `http://127.0.0.1:8000/docs`
-
-### Option B — Standalone video loop
-
-```bash
-python video.py
-```
-
-Press `q` to exit.
-
----
-
-## API Endpoints
-
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| GET | `/health` | Server status |
-| POST | `/process_frame` | Fall detection + face recognition |
-| POST | `/analyze_vitals` | Vitals risk classification |
-| POST | `/process_event` | Full pipeline (frame + vitals + alert) |
-| GET | `/incidents` | All recorded fall incidents |
-| GET | `/incidents/{name}` | Incidents for a specific person |
-| GET | `/stats` | Fall counts per person |
-
----
-
-## Testing
-
-```bash
-# Start the server first, then:
-python test_api.py
-```
-
----
-
-## Environment Variables
-
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `BOT_TOKEN` | Telegram bot token | — |
-| `CHAT_ID` | Telegram chat ID | — |
-| `FALL_CONF` | YOLO confidence threshold | `0.75` |
-| `DEEPFACE_THRESHOLD` | Face match distance threshold | `0.25` |
-| `KNOWN_FACES_DIR` | Known faces directory | `known_faces` |
-| `MODEL_PATH` | YOLO weights path | `fall_det_1.pt` |
-| `DB_PATH` | SQLite database path | `guardiancare.db` |
-
----
-
-## Requirements
-
-- Python 3.10+
-- See `requirements.txt` for all dependencies
+- **الموقع يفتح ولا يحمّل البيانات** — افتح [حالة الخادم](http://127.0.0.1:8001/health). إذا فتح الرابط، تأكد أن `VITE_API_BASE_URL` يشير لنفس المنفذ، ثم أعد تشغيل Vite بعد تعديل ملف البيئة.
+- **تظهر استجابة 401** — سجّل الدخول للموقع وتأكد أن ملفّي البيئة يشيران لنفس مشروع Supabase. للمحاكي والفحص، تأكد أن الخادم قرأ `SIMULATOR_API_KEY` بعد آخر تعديل.
+- **PowerShell لا يجد ملفًا أو مكتبة** — نفّذ `Get-Location`. الجذر الصحيح يحتوي على `guardiancare_api` و`frontend` و`requirements.txt`. استخدم المسار الكامل لمفسّر `.venv` كما في أمر التشغيل.

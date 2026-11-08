@@ -5,24 +5,15 @@ FastAPI application entry point.
 All AI models are loaded once at startup — never per-request.
 
 Run:
-    uvicorn guardiancare_api.main:app --reload
+    python -m uvicorn guardiancare_api.main:app --reload --port 8001
 """
 
-import sys
 import time
-import logging
-from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-
-# Ensure the project root (Fall_Detection/) is on sys.path so that
-# Db.py and alert.py are importable as top-level modules.
-_ROOT = Path(__file__).resolve().parent.parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
 
 from guardiancare_api.config import ALLOWED_ORIGINS
 from guardiancare_api.utils.logger import get_logger
@@ -34,7 +25,7 @@ from guardiancare_api.services.recognition_service import RecognitionService
 from guardiancare_api.services.vitals_service import VitalsService
 from guardiancare_api.services.decision_service import DecisionService
 from guardiancare_api.services.alert_service import AlertService
-from guardiancare_api.api.routes import router, inject_services
+from guardiancare_api.api.routes import router, public_router, inject_services
 
 log = get_logger(__name__)
 
@@ -72,7 +63,7 @@ async def lifespan(app: FastAPI):
 
     elapsed = time.time() - t0
     log.info(f"All models loaded in {elapsed:.1f}s — API is ready")
-    log.info("Docs: http://127.0.0.1:8000/docs")
+    log.info("API docs are available at /docs on the configured server port")
 
     yield  # ← application runs here
 
@@ -127,6 +118,7 @@ async def global_exception_handler(request: Request, exc: Exception):
 
 # ── Include routes ─────────────────────────────────────────────────────────
 
+app.include_router(public_router)
 app.include_router(router)
 
 
@@ -134,4 +126,4 @@ app.include_router(router)
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("guardiancare_api.main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("guardiancare_api.main:app", host="127.0.0.1", port=8001, reload=True)

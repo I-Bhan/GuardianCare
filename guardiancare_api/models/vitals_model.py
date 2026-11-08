@@ -1,7 +1,7 @@
 """
 models/vitals_model.py
 Loads the trained Gradient Boosting vitals classifier.
-Run train_vitals.py first to generate the .pkl files.
+Run python -m scripts.train_vitals first to generate the .pkl files.
 """
 
 import numpy as np
@@ -45,7 +45,7 @@ class VitalsClassificationModel:
             log.info("Vitals model loaded successfully")
         except FileNotFoundError:
             log.warning(
-                "Vitals model not found. Run 'python train_vitals.py' first."
+                "Vitals model not found. Run 'python -m scripts.train_vitals' first."
             )
         except Exception as exc:
             log.error(f"Failed to load vitals model: {exc}")
@@ -66,7 +66,7 @@ class VitalsClassificationModel:
             {risk_level: str, confidence: float}
         """
         if not self._ready:
-            raise RuntimeError("Vitals model is not loaded. Run train_vitals.py first.")
+            raise RuntimeError("Vitals model is not loaded. Run python -m scripts.train_vitals first.")
 
         features = np.array([[
             vitals["heart_rate"],

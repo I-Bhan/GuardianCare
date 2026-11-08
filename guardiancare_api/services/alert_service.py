@@ -1,22 +1,11 @@
 """
 services/alert_service.py
-Telegram alert dispatcher — reuses alert.py's send_telegram_alert()
-and enriches the message with the full decision context.
+Send Telegram alerts with the fall and vitals decision.
 """
 
-import sys
-import time
-import os
 import numpy as np
-from pathlib import Path
 
-# Ensure the root project directory is on sys.path so we can import alert.py
-_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
-
-from alert import send_telegram_alert  # existing alert.py — untouched
-
+from guardiancare_api.services.telegram import send_telegram_alert
 from guardiancare_api.config import BOT_TOKEN, CHAT_ID, ALERTS_DIR
 from guardiancare_api.utils.logger import get_logger
 

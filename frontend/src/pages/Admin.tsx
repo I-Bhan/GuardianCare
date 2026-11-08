@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Users, Shield, CheckCircle, AlertCircle, UserPlus, Link2, Plus } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { api } from '../lib/api'
-import { useAuth } from '../context/AuthContext'
+import { useAuth } from '../hooks/useAuth'
 import type { Profile, Role } from '../lib/supabase'
 
 interface Patient { id: string; name: string; room: string }
@@ -28,19 +28,21 @@ export default function Admin() {
   useEffect(() => {
     if (authLoading) return
     if (role !== 'admin') { navigate('/dashboard'); return }
-    loadData()
-  }, [role, authLoading]) // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadData = async () => {
-    const [{ data: prof }, { data: assign }, patientsRes] = await Promise.all([
+    let active = true
+    Promise.all([
       supabase.from('profiles').select('*').order('created_at'),
       supabase.from('patient_assignments').select('*'),
       api.get<Patient[]>('/patients').catch(() => ({ data: [] as Patient[] })),
-    ])
-    setProfiles(prof ?? [])
-    setAssignments(assign ?? [])
-    setPatients(patientsRes.data)
-  }
+    ]).then(([{ data: prof }, { data: assign }, patientsRes]) => {
+      if (!active) return
+      setProfiles(prof ?? [])
+      setAssignments(assign ?? [])
+      setPatients(patientsRes.data)
+    }).catch(() => {
+      if (active) setToast({ type: 'err', msg: 'Failed to load admin data' })
+    })
+    return () => { active = false }
+  }, [role, authLoading, navigate])
 
   const showToast = (type: 'ok' | 'err', msg: string) => {
     setToast({ type, msg })
@@ -113,14 +115,14 @@ export default function Admin() {
   }
 
   const roleColors: Record<Role, string> = {
-    admin:     'bg-red-100 text-red-700',
-    caregiver: 'bg-blue-100 text-blue-700',
-    viewer:    'bg-slate-100 text-slate-600',
+    admin:     'tone-ink',
+    caregiver: 'tone-sage',
+    viewer:    'tone-neutral',
   }
 
   return (
     <div className="min-h-screen bg-offwhite">
-      <div className="bg-navy text-white px-4 sm:px-8 py-8">
+      <div className="workspace-heading px-4 sm:px-8 py-8">
         <div className="max-w-5xl mx-auto flex items-center gap-3">
           <Shield size={24} className="text-sage" />
           <div>
@@ -133,7 +135,7 @@ export default function Admin() {
       <div className="max-w-5xl mx-auto px-4 sm:px-8 py-8 space-y-8">
         {toast && (
           <div className={`fixed top-4 right-4 z-50 flex items-center gap-2 px-4 py-3 rounded-lg shadow-lg text-sm font-medium
-            ${toast.type === 'ok' ? 'bg-sage text-white' : 'bg-red-500 text-white'}`}>
+            ${toast.type === 'ok' ? 'state-success-box' : 'state-danger-box'}`}>
             {toast.type === 'ok' ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
             {toast.msg}
           </div>
@@ -143,14 +145,14 @@ export default function Admin() {
         <div className="card overflow-hidden p-0">
           <div className="px-6 py-4 border-b border-slate/10 flex items-center gap-2">
             <UserPlus size={18} className="text-sage" />
-            <h2 className="font-semibold text-navy">Patients</h2>
+            <h2 className="font-semibold text-ink">Patients</h2>
           </div>
 
           <div className="divide-y divide-slate/10">
             {patients.map(pt => (
-              <div key={pt.id} className="px-6 py-3 flex items-center justify-between hover:bg-cream/40">
+              <div key={pt.id} className="px-6 py-3 flex items-center justify-between surface-hover">
                 <div>
-                  <p className="text-sm font-medium text-navy">{pt.name}</p>
+                  <p className="text-sm font-medium text-ink">{pt.name}</p>
                   {pt.room && <p className="text-xs text-slate">{pt.room}</p>}
                 </div>
                 <button
@@ -165,7 +167,7 @@ export default function Admin() {
           </div>
 
           {/* Add patient form */}
-          <div className="px-6 py-4 bg-cream/30 border-t border-slate/10">
+          <div className="px-6 py-4 surface-band border-t border-slate/10">
             <p className="text-xs font-semibold text-slate uppercase tracking-wider mb-3">Add Patient</p>
             <div className="flex gap-2">
               <input
@@ -200,13 +202,13 @@ export default function Admin() {
         <div className="card overflow-hidden p-0">
           <div className="px-6 py-4 border-b border-slate/10 flex items-center gap-2">
             <Users size={18} className="text-sage" />
-            <h2 className="font-semibold text-navy">Users ({profiles.length})</h2>
+            <h2 className="font-semibold text-ink">Users ({profiles.length})</h2>
           </div>
 
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
-                <tr className="bg-cream text-left">
+                <tr className="surface-band text-left">
                   <th className="px-4 py-3 text-xs font-semibold text-slate uppercase tracking-wider">Name</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate uppercase tracking-wider">Role</th>
                   <th className="px-4 py-3 text-xs font-semibold text-slate uppercase tracking-wider">Assigned Patient</th>
@@ -214,9 +216,9 @@ export default function Admin() {
               </thead>
               <tbody>
                 {profiles.map(p => (
-                  <tr key={p.id} className="border-b border-slate/10 hover:bg-cream/40 transition-colors">
+                  <tr key={p.id} className="border-b border-slate/10 surface-hover transition-colors">
                     <td className="px-4 py-3">
-                      <p className="text-sm font-medium text-navy">{p.full_name}</p>
+                      <p className="text-sm font-medium text-ink">{p.full_name}</p>
                       <p className="text-xs text-slate">{p.id.slice(0, 8)}…</p>
                     </td>
 
@@ -229,7 +231,7 @@ export default function Admin() {
                           value={p.role}
                           onChange={e => updateRole(p.id, e.target.value as Role)}
                           disabled={saving === p.id + '_role'}
-                          className="text-xs border border-slate/30 rounded-md px-2 py-1 bg-offwhite text-navy focus:outline-none focus:ring-1 focus:ring-sage"
+                          className="text-xs border border-slate/30 rounded-md px-2 py-1 bg-offwhite text-ink focus:outline-none focus:ring-1 focus:ring-sage"
                         >
                           <option value="admin">admin</option>
                           <option value="caregiver">caregiver</option>
@@ -243,7 +245,7 @@ export default function Admin() {
                         value={getAssignment(p.id)}
                         onChange={e => updateAssignment(p.id, e.target.value)}
                         disabled={saving === p.id + '_patient'}
-                        className="text-xs border border-slate/30 rounded-md px-2 py-1 bg-offwhite text-navy focus:outline-none focus:ring-1 focus:ring-sage"
+                        className="text-xs border border-slate/30 rounded-md px-2 py-1 bg-offwhite text-ink focus:outline-none focus:ring-1 focus:ring-sage"
                       >
                         <option value="">— No assignment —</option>
                         {patients.map(pt => (

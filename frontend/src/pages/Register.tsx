@@ -51,7 +51,7 @@ export default function Register() {
           <div className="bg-navy w-14 h-14 rounded-2xl flex items-center justify-center mb-4">
             <Shield className="text-sage" size={28} />
           </div>
-          <h1 className="text-2xl font-bold text-navy">Create an Account</h1>
+          <h1 className="text-2xl font-bold text-ink">Create an Account</h1>
           {patientName ? (
             <div className="mt-2 flex items-center gap-2 bg-sage/10 text-sage text-sm px-4 py-2 rounded-full font-medium">
               <UserCheck size={16} />
@@ -66,7 +66,7 @@ export default function Register() {
           {success ? (
             <div className="text-center py-4">
               <CheckCircle className="mx-auto text-sage mb-3" size={40} />
-              <p className="text-navy font-semibold mb-2">Account created!</p>
+              <p className="text-ink font-semibold mb-2">Account created!</p>
               <p className="text-slate text-sm mb-4">
                 {patientName
                   ? `You're registered as a caregiver for ${patientName}.`
@@ -79,14 +79,14 @@ export default function Register() {
           ) : (
             <form onSubmit={handleRegister} className="space-y-5">
               {error && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+                <div className="flex items-center gap-2 state-danger-box border text-sm px-4 py-3 rounded-lg">
                   <AlertCircle size={16} />
                   {error}
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-navy mb-1.5">Full Name</label>
+                <label className="block text-sm font-medium text-ink mb-1.5">Full Name</label>
                 <input
                   type="text"
                   value={fullName}
@@ -98,7 +98,7 @@ export default function Register() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-navy mb-1.5">Email address</label>
+                <label className="block text-sm font-medium text-ink mb-1.5">Email address</label>
                 <input
                   type="email"
                   value={email}
@@ -110,7 +110,7 @@ export default function Register() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-navy mb-1.5">Password</label>
+                <label className="block text-sm font-medium text-ink mb-1.5">Password</label>
                 <div className="relative">
                   <input
                     type={showPass ? 'text' : 'password'}
@@ -124,7 +124,7 @@ export default function Register() {
                   <button
                     type="button"
                     onClick={() => setShowPass(!showPass)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate hover:text-navy transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate hover:text-ink transition-colors"
                   >
                     {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -136,7 +136,7 @@ export default function Register() {
                 disabled={loading}
                 className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60"
               >
-                {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+                {loading && <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />}
                 {loading ? 'Creating account...' : 'Create Account'}
               </button>
             </form>
@@ -145,7 +145,7 @@ export default function Register() {
 
         <p className="text-center text-xs text-slate mt-6">
           Already have an account?{' '}
-          <Link to="/login" className="text-navy font-medium hover:underline">Sign in</Link>
+          <Link to="/login" className="text-ink font-medium hover:underline">Sign in</Link>
         </p>
       </div>
     </div>

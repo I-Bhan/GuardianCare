@@ -35,10 +35,11 @@ export default function Login() {
       return
     }
     setLoading(true)
-    await supabase.auth.resetPasswordForEmail(email, {
+    const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
       redirectTo: `${window.location.origin}/reset-password`,
     })
-    setResetSent(true)
+    if (resetError) setError(resetError.message)
+    else setResetSent(true)
     setLoading(false)
   }
 
@@ -50,7 +51,7 @@ export default function Login() {
           <div className="bg-navy w-14 h-14 rounded-2xl flex items-center justify-center mb-4">
             <Shield className="text-sage" size={28} />
           </div>
-          <h1 className="text-2xl font-bold text-navy">Sign in to GuardianCare</h1>
+          <h1 className="text-2xl font-bold text-ink">Sign in to GuardianCare</h1>
           <p className="text-slate text-sm mt-1">Monitor patients and incidents</p>
         </div>
 
@@ -69,14 +70,14 @@ export default function Login() {
           ) : (
             <form onSubmit={handleLogin} className="space-y-5">
               {error && (
-                <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">
+                <div className="flex items-center gap-2 state-danger-box border text-sm px-4 py-3 rounded-lg">
                   <AlertCircle size={16} />
                   {error}
                 </div>
               )}
 
               <div>
-                <label className="block text-sm font-medium text-navy mb-1.5">
+                <label className="block text-sm font-medium text-ink mb-1.5">
                   Email address
                 </label>
                 <input
@@ -90,7 +91,7 @@ export default function Login() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-navy mb-1.5">
+                <label className="block text-sm font-medium text-ink mb-1.5">
                   Password
                 </label>
                 <div className="relative">
@@ -105,7 +106,7 @@ export default function Login() {
                   <button
                     type="button"
                     onClick={() => setShowPass(!showPass)}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate hover:text-navy transition-colors"
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-slate hover:text-ink transition-colors"
                   >
                     {showPass ? <EyeOff size={18} /> : <Eye size={18} />}
                   </button>
@@ -128,7 +129,7 @@ export default function Login() {
                 className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60"
               >
                 {loading ? (
-                  <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  <span className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />
                 ) : null}
                 {loading ? 'Signing in...' : 'Sign In'}
               </button>
@@ -138,13 +139,13 @@ export default function Login() {
 
         <p className="text-center text-xs text-slate mt-6">
           No account?{' '}
-          <Link to="/register" className="text-navy font-medium hover:underline">
+          <Link to="/register" className="text-ink font-medium hover:underline">
             Create one
           </Link>
         </p>
 
         <div className="text-center mt-4">
-          <Link to="/" className="text-sm text-slate hover:text-navy transition-colors">
+          <Link to="/" className="text-sm text-slate hover:text-ink transition-colors">
             ← Back to Home
           </Link>
         </div>

@@ -52,7 +52,7 @@ class VitalsService:
             return {
                 "risk_level":  "Unknown",
                 "confidence":  0.0,
-                "explanation": "Vitals model not loaded. Run train_vitals.py first.",
+                "explanation": "Vitals model not loaded. Run python -m scripts.train_vitals first.",
                 "valid":       False,
                 "errors":      ["Model not ready"],
             }

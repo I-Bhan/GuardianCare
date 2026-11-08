@@ -1,5 +1,3 @@
-import sys
-from pathlib import Path
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
@@ -7,16 +5,13 @@ from guardiancare_api.auth import verify_token
 from pydantic import BaseModel, Field
 from typing import Optional
 
-_ROOT = Path(__file__).resolve().parent.parent.parent
-if str(_ROOT) not in sys.path:
-    sys.path.insert(0, str(_ROOT))
-
-import Db
+from guardiancare_api import database
 from guardiancare_api.utils.video_utils import decode_base64_frame, bytes_to_frame
 from guardiancare_api.utils.logger import get_logger
 
 log = get_logger(__name__)
 router = APIRouter(dependencies=[Depends(verify_token)])
+public_router = APIRouter()
 
 _detection_svc   = None
 _recognition_svc = None
@@ -73,7 +68,7 @@ class AddPatientRequest(BaseModel):
 
 # ── Health ─────────────────────────────────────────────────────────────────────
 
-@router.get("/health")
+@public_router.get("/health")
 async def health():
     return {
         "status":        "ok",
@@ -142,10 +137,10 @@ async def analyze_vitals(req: VitalsInput):
         raise HTTPException(422, detail=result["errors"])
 
     if req.device_id:
-        patient      = Db.get_patient_by_device(req.device_id)
+        patient      = database.get_patient_by_device(req.device_id)
         patient_id   = patient["id"]   if patient else None
         patient_name = patient["name"] if patient else "Unknown"
-        Db.log_vitals_reading(
+        database.log_vitals_reading(
             device_id=req.device_id,
             patient_id=patient_id,
             patient_name=patient_name,
@@ -155,7 +150,7 @@ async def analyze_vitals(req: VitalsInput):
         )
         # Treat High Risk vitals as an incident
         if result["risk_level"] == "High Risk":
-            Db.log_incident(
+            database.log_incident(
                 person_name=patient_name,
                 patient_id=patient_id,
                 alert_sent=False,
@@ -197,9 +192,9 @@ async def process_event(req: ProcessEventRequest):
     if decision["send_alert"]:
         img_path = _alert_svc.send(decision, frame)
         if fall_result["fall_detected"]:
-            Db.log_incident(
+            database.log_incident(
                 person_name=person_name,
-                patient_id=Db.get_patient_id_by_name(person_name),
+                patient_id=database.get_patient_id_by_name(person_name),
                 image_path=img_path,
                 alert_sent=img_path is not None,
             )
@@ -215,7 +210,7 @@ async def process_event(req: ProcessEventRequest):
 @router.get("/incidents")
 async def get_incidents():
     try:
-        rows = Db.get_all_incidents()
+        rows = database.get_all_incidents()
         return [
             {
                 "id":         r["id"],
@@ -234,7 +229,7 @@ async def get_incidents():
 @router.get("/incidents/{patient_id}")
 async def get_incidents_by_patient(patient_id: str):
     try:
-        rows = Db.get_incidents_by_patient(patient_id)
+        rows = database.get_incidents_by_patient(patient_id)
         return [
             {
                 "id":         r["id"],
@@ -253,7 +248,7 @@ async def get_incidents_by_patient(patient_id: str):
 @router.get("/stats")
 async def get_stats():
     try:
-        rows = Db.get_fall_counts()
+        rows = database.get_fall_counts()
         return [
             {
                 "name":  r["person_name"],
@@ -269,7 +264,7 @@ async def get_stats():
 @router.get("/vitals")
 async def get_vitals():
     try:
-        return Db.get_all_vitals()
+        return database.get_all_vitals()
     except Exception as exc:
         log.error(f"/vitals error: {exc}")
         raise HTTPException(500, "Database error")
@@ -278,7 +273,7 @@ async def get_vitals():
 @router.get("/vitals/{patient_id}")
 async def get_vitals_by_patient(patient_id: str):
     try:
-        return Db.get_vitals_by_patient(patient_id)
+        return database.get_vitals_by_patient(patient_id)
     except Exception as exc:
         log.error(f"/vitals/{{patient_id}} error: {exc}")
         raise HTTPException(500, "Database error")
@@ -286,7 +281,7 @@ async def get_vitals_by_patient(patient_id: str):
 
 @router.get("/patients")
 async def get_patients():
-    return Db.get_all_patients()
+    return database.get_all_patients()
 
 
 @router.post("/patients", status_code=201)
@@ -294,15 +289,15 @@ async def add_patient(req: AddPatientRequest):
     import uuid
     patient_id = str(uuid.uuid4())[:8]
     device_id  = f"watch_{patient_id}"
-    Db.add_patient(patient_id, req.name, req.room or "")
-    Db.add_device(device_id, patient_id)
+    database.add_patient(patient_id, req.name, req.room or "")
+    database.add_device(device_id, patient_id)
     return {"id": patient_id, "name": req.name, "room": req.room or "", "device_id": device_id}
 
 
 @router.get("/devices")
 async def get_devices():
     try:
-        return Db.get_all_devices()
+        return database.get_all_devices()
     except Exception as exc:
         log.error(f"/devices error: {exc}")
         raise HTTPException(500, "Database error")

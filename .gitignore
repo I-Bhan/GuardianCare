@@ -14,7 +14,7 @@ dist/
 downloads/
 eggs/
 .eggs/
-lib/
+/lib/
 lib64/
 parts/
 sdist/
@@ -157,12 +157,18 @@ cython_debug/
 
 # ── GuardianCare project-specific ─────────────────────────────────────────────
 
+# Node dependencies (install from frontend/package-lock.json)
+node_modules/
+
 # Sensitive / credentials
 .env
 .env.*
 
 # Database (contains personal incident data)
 *.db
+*.db-wal
+*.db-shm
+*.db-journal
 *.sqlite3
 *.sqlite
 
@@ -183,12 +189,17 @@ runs/
 videos/
 *.mp4
 
-# Trained model weights (large — use Git LFS or share separately)
+# Keep the four runtime models. Ignore other checkpoints and training output.
 *.pt
 *.pkl
+!/models/fall_det_1.pt
+!/models/vitals_model.pkl
+!/models/vitals_scaler.pkl
+!/models/vitals_labels.pkl
 
 # Dataset (large — share via link or Kaggle)
 *.csv
 
 # Environment file (contains secrets)
 .env
+!.env.example

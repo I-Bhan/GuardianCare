@@ -5,14 +5,15 @@ const config: Config = {
   theme: {
     extend: {
       colors: {
-        navy:   '#0F1D2D',
-        sage:   '#7A9A7A',
-        cream:  '#E7E2D6',
-        slate:  '#A9B1B7',
-        offwhite: '#F7F7F5',
+        ink: 'var(--text)',
+        navy:   'var(--hero)',
+        sage:   'rgb(var(--accent-rgb) / <alpha-value>)',
+        cream:  'rgb(var(--surface-rgb) / <alpha-value>)',
+        slate:  'rgb(var(--soft-rgb) / <alpha-value>)',
+        offwhite: 'var(--page)',
       },
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
+        sans: ['IBM Plex Sans Arabic', 'system-ui', 'sans-serif'],
       },
     },
   },

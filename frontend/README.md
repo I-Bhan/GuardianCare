@@ -1,73 +1,27 @@
-# React + TypeScript + Vite
+# واجهة GuardianCare
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+تستخدم الواجهة React وTypeScript وVite. لإعداد الخادم والنماذج وتسجيل الدخول، اتبع [دليل المشروع](../README.md).
 
-Currently, two official plugins are available:
+## التطوير المحلي
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+من داخل `frontend/`، شغّل `npm.cmd ci` عند تجهيز نسخة جديدة. ضع إعدادات Supabase وعنوان الـAPI في `.env` باستخدام [.env.example](.env.example) كمرجع.
 
-## React Compiler
-
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
-
-## Expanding the ESLint configuration
-
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
-
-```js
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-
-      // Remove tseslint.configs.recommended and replace with this
-      tseslint.configs.recommendedTypeChecked,
-      // Alternatively, use this for stricter rules
-      tseslint.configs.strictTypeChecked,
-      // Optionally, add this for stylistic rules
-      tseslint.configs.stylisticTypeChecked,
-
-      // Other configs...
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
+```powershell
+npm.cmd run dev -- --host 127.0.0.1 --port 5173 --strictPort
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+افتح [الموقع المحلي](http://127.0.0.1:5173/). لفحص الكود شغّل `npm.cmd run lint`، وللتحقق من TypeScript وبناء ملفات `dist/` شغّل `npm.cmd run build`.
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+## أين أعدّل؟
 
-export default defineConfig([
-  globalIgnores(['dist']),
-  {
-    files: ['**/*.{ts,tsx}'],
-    extends: [
-      // Other configs...
-      // Enable lint rules for React
-      reactX.configs['recommended-typescript'],
-      // Enable lint rules for React DOM
-      reactDom.configs.recommended,
-    ],
-    languageOptions: {
-      parserOptions: {
-        project: ['./tsconfig.node.json', './tsconfig.app.json'],
-        tsconfigRootDir: import.meta.dirname,
-      },
-      // other options...
-    },
-  },
-])
-```
+| المسار | المحتوى |
+|---|---|
+| `src/App.tsx` | المسارات والتخطيط المشترك لصفحات الحساب ولوحة العمل. |
+| `src/pages/` | الرئيسية، الحساب، لوحة المؤشرات، وصفحة الإدارة. |
+| `src/components/` | سجل الحوادث، شريط المرضى القابل للسحب، التنقّل وأدوات الحساب. |
+| `src/components/monitoring.ts` | ترتيب درجة الخطورة وتفضيلات النجوم المحفوظة لكل حساب في المتصفح. |
+| `src/lib/` | اتصال الواجهة بالـAPI وبـSupabase. |
+| `src/context/` و`src/hooks/` | جلسة المستخدم وتحميل البيانات. |
+| `src/index.css` و`public/` | ألوان النمطين، تخطيط الجوال، الخطوط والشعار. |
+
+في لوحة المتابعة، النجمة بجانب مؤشر تقدّمه في بطاقات المرضى، والنجمة بجانب حادثة تضيفها إلى فلتر **Starred**. يعرض سجل الحوادث آخر تقييم متاح للمريض، ويضع الحالات التي لا تتوفر لها قراءة معروفة تحت **Not assessed**.
